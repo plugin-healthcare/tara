@@ -233,6 +233,7 @@ class SyncResult:
     updated: list[str]
     removed: list[str]
     unchanged: list[str]
+    skipped: list[str]
     warnings: list[str]
 
 
@@ -245,7 +246,9 @@ def sync(root: Path | None = None, all_packages: bool = False) -> SyncResult:
     Returns a SyncResult describing what changed.
     """
     root = root or repo_root()
-    result = SyncResult(added=[], updated=[], removed=[], unchanged=[], warnings=[])
+    result = SyncResult(
+        added=[], updated=[], removed=[], unchanged=[], skipped=[], warnings=[]
+    )
 
     raw, warning = _discover(root)
     if warning:
@@ -291,6 +294,17 @@ def sync(root: Path | None = None, all_packages: bool = False) -> SyncResult:
     for name, skill in found.items():
         existing = lock.get(name)
         if existing is None:
+            # A skill dir we don't own already sits here: it was placed by the
+            # core selection (wingman init/add) or a git theme. sync is
+            # additive and must never clobber the core, so skip and warn.
+            if _dest(name).exists():
+                result.skipped.append(name)
+                result.warnings.append(
+                    f"Skipping '{name}' from {skill.package}: a skill with that "
+                    "name already exists (core/git-managed). Remove it first if "
+                    "you want the package version instead."
+                )
+                continue
             _install_skill(skill)
             lock[name] = {"package": skill.package, "version": skill.version}
             result.added.append(name)

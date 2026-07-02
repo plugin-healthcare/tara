@@ -1,26 +1,38 @@
 # ADR-{number}: {title}
 
-Date: {date}  
-Status: Proposed | Accepted | Deprecated | Superseded by ADR-XXXX
+- **Status:** Proposed
+- **Date:** {date}
+- **Authors:**
 
-## Context
-<!-- What is the situation that requires a decision? What forces are at play? -->
+## Context and Problem Statement
 
-## Decision
-<!-- What have we decided to do? State it clearly and directly. -->
+<!-- Two or three sentences, or a short illustrative story. State the problem,
+ideally as a question, and link the issue, board, or spike that raised it. -->
 
-## Consequences
-### Positive
-- 
+## Considered Options
 
-### Negative
-- 
+- {option 1}
+- {option 2}
+- {option 3}
 
-### Neutral
-- 
+## Decision Outcome
 
-## Alternatives Considered
-<!-- What else was evaluated and why was it not chosen? -->
+Chosen option: "{option 1}", because {justification: it is the only option that
+meets a key criterion, resolves a driving force, or comes out best overall}.
 
-## References
-<!-- Links to relevant docs, discussions, or prior art -->
+### Consequences
+
+- Good, because {positive consequence}.
+- Bad, because {negative consequence}.
+
+<!-- Optional sections below (from MADR + house additions). Keep only the ones that
+add clarity, delete the rest. -->
+
+## Architecture
+
+<!-- When structure is easier shown than told: an ASCII, Mermaid, or LikeC4 diagram,
+or a comparison table weighing the options against the concerns that matter. -->
+
+## Rollout
+
+<!-- If the decision is delivered in steps, list the phases. -->

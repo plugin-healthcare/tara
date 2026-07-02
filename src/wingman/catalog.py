@@ -62,13 +62,40 @@ def _bundled(kind: str, folder: str, pattern: str) -> list[CatalogItem]:
     return items
 
 
+def _bundled_skills() -> list[CatalogItem]:
+    """Skills shipped as package data under ``data/catalog/skills/<name>/``.
+
+    Each is a folder holding a ``SKILL.md``; the folder name is the skill name.
+    These have no upstream git source, so they carry a ``source`` path and are
+    installed by copying the tree (not tracked in the manifest).
+    """
+    base = data_path() / "catalog" / "skills"
+    if not base.is_dir():
+        return []
+    items: list[CatalogItem] = []
+    for skill_md in sorted(base.glob("*/SKILL.md")):
+        folder = skill_md.parent
+        items.append(
+            CatalogItem(
+                name=folder.name,
+                kind="skill",
+                description=_first_paragraph(skill_md.read_text()),
+                source=folder,
+            )
+        )
+    return items
+
+
 def catalog_skills() -> list[CatalogItem]:
     """Skill themes offered in the picker, one entry per theme (set).
 
-    Selecting a theme installs all of its skills. Any loose ``[skills.*]`` index
-    entries not covered by a theme are appended as individual selectable items.
+    Selecting a theme installs all of its skills. Wingman's own bundled skills
+    (package data, copied in) are listed first, then any loose ``[skills.*]``
+    index entries not covered by a theme are appended as individual items.
     """
-    items: list[CatalogItem] = []
+    items: list[CatalogItem] = _bundled_skills()
+    seen = {it.name for it in items}
+
     for name, sset in skills.read_sets_index().items():
         items.append(
             CatalogItem(
@@ -80,6 +107,8 @@ def catalog_skills() -> list[CatalogItem]:
     if index.exists():
         loose = tomllib.loads(index.read_text()).get("skills", {})
         for name, entry in loose.items():
+            if name in seen:
+                continue
             items.append(
                 CatalogItem(
                     name=name,
@@ -162,6 +191,13 @@ _DEST = {
 def install_item(item: CatalogItem) -> str:
     """Install one catalog item into the repo. Returns a status line."""
     if item.kind == "skill":
+        if item.source is not None:  # bundled skill: copy the tree, no manifest entry
+            dest = repo_root() / skills.SKILLS_DIR / item.name
+            if dest.exists():
+                shutil.rmtree(dest)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(item.source, dest, ignore=shutil.ignore_patterns(".git"))
+            return f"  skill   {item.name} (bundled)"
         if item.is_set:
             installed = skills.add_set(item.name)
             names = ", ".join(s.name for s, _ in installed)

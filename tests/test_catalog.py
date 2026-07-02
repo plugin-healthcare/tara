@@ -84,3 +84,61 @@ def test_install_default_mcp_does_not_warn(repo):
     # git is a local default: no warning either.
     item = next(it for it in catalog.catalog(["mcp"])["mcp"] if it.name == "git")
     assert "\u26a0" not in catalog.install_item(item)
+
+
+def _make_bundled_skill(data_dir, name: str) -> None:
+    folder = data_dir / "catalog" / "skills" / name
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text(
+        f"---\nname: {name}\n"
+        f'description: "The {name} skill. Use when testing bundled skills."\n'
+        f"---\n\n# {name}\n\nEnough body content to be a usable skill here.\n"
+    )
+    (folder / "references").mkdir()
+    (folder / "references" / "note.md").write_text("reference material\n")
+
+
+def test_catalog_skills_includes_bundled(repo, tmp_path, monkeypatch):
+    data_dir = tmp_path / "data"
+    _make_bundled_skill(data_dir, "writing-adrs")
+    monkeypatch.setattr(catalog, "data_path", lambda: data_dir)
+
+    items = catalog.catalog_skills()
+    adrs = next(it for it in items if it.name == "writing-adrs")
+    assert adrs.kind == "skill"
+    assert adrs.source is not None
+    assert "adr" in adrs.description.lower()
+
+
+def test_install_bundled_skill_copies_tree(repo, tmp_path, monkeypatch):
+    from wingman import skills
+
+    data_dir = tmp_path / "data"
+    _make_bundled_skill(data_dir, "writing-adrs")
+    monkeypatch.setattr(catalog, "data_path", lambda: data_dir)
+
+    item = next(it for it in catalog.catalog_skills() if it.name == "writing-adrs")
+    line = catalog.install_item(item)
+    assert "bundled" in line
+
+    dest = repo / skills.SKILLS_DIR / "writing-adrs"
+    assert (dest / "SKILL.md").is_file()
+    assert (dest / "references" / "note.md").is_file()
+    # bundled skills are not tracked in the manifest
+    assert "writing-adrs" not in skills.read_manifest()
+
+
+def test_install_bundled_skill_overwrites_existing(repo, tmp_path, monkeypatch):
+    from wingman import skills
+
+    data_dir = tmp_path / "data"
+    _make_bundled_skill(data_dir, "writing-adrs")
+    monkeypatch.setattr(catalog, "data_path", lambda: data_dir)
+
+    item = next(it for it in catalog.catalog_skills() if it.name == "writing-adrs")
+    catalog.install_item(item)
+    stale = repo / skills.SKILLS_DIR / "writing-adrs" / "stale.md"
+    stale.write_text("stale\n")
+
+    catalog.install_item(item)
+    assert not stale.exists()

@@ -1,0 +1,43 @@
+# Wingman's opinionated pre-commit standard.
+#
+# Install into your repo with `uv run pre-commit install`, then it runs on every
+# commit. Keep the hook versions in sync with the ruff/ty versions in your
+# dependency groups. Requires uv >= 0.11 for the `ty` hook via `uv run`.
+#
+# gitleaks blocks committed secrets; actionlint + zizmor lint and security-audit
+# GitHub Actions workflows (they only run when workflow/action files change).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.26.1
+    hooks:
+      - id: zizmor
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty check
+        entry: uv run ty check .
+        language: system
+        pass_filenames: false
+        always_run: true

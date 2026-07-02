@@ -37,3 +37,36 @@ def test_agent_add_unknown_fails(repo):
     result = runner.invoke(app, ["agent", "add", "nope"])
     assert result.exit_code == 1
     assert "no agent" in result.output
+
+
+def test_new_doc_changelog_writes_root_singleton(repo):
+    result = runner.invoke(app, ["new", "changelog"])
+    assert result.exit_code == 0
+    changelog = repo / "CHANGELOG.md"
+    assert changelog.is_file()
+    assert "Keep a Changelog" in changelog.read_text()
+
+
+def test_new_doc_ci_writes_workflow(repo):
+    result = runner.invoke(app, ["new", "ci"])
+    assert result.exit_code == 0
+    workflow = repo / ".github" / "workflows" / "ci.yml"
+    assert workflow.is_file()
+    body = workflow.read_text()
+    assert "permissions:" in body
+    assert "uv audit" in body
+    # third-party actions must be SHA-pinned, not tag-pinned
+    assert "actions/checkout@9c091bb" in body
+
+
+def test_new_doc_adr_requires_title(repo):
+    result = runner.invoke(app, ["new", "adr"])
+    assert result.exit_code == 1
+    assert "needs a title" in result.output
+
+
+def test_new_doc_adr_with_title(repo):
+    result = runner.invoke(app, ["new", "adr", "use postgres over mongodb"])
+    assert result.exit_code == 0
+    adr = repo / "docs" / "decisions" / "0001-use-postgres-over-mongodb.md"
+    assert adr.is_file()

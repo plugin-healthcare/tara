@@ -26,6 +26,7 @@ from wingman import check as check_mod
 from wingman import docs as docs_mod
 from wingman import review as review_mod
 from wingman import skills as skills_mod
+from wingman import standards as standards_mod
 from wingman import sync as sync_mod
 from wingman.core import (
     data_path,
@@ -83,6 +84,10 @@ def sync(
 
     By default only direct dependencies from pyproject.toml are considered.
     """
+    _run_sync(all_=all_, docs=docs)
+
+
+def _run_sync(all_: bool, docs: bool) -> None:
     direct = sync_mod.direct_deps(repo_root()) or set()
 
     # Phase 1: embedded skills from installed packages.
@@ -95,6 +100,8 @@ def sync(
         typer.echo(f"  skill updated  {name}")
     for name in result.removed:
         typer.echo(f"  skill removed  {name}")
+    for name in result.skipped:
+        typer.echo(f"  skill skipped  {name} (core-managed, not overwritten)")
     for name in result.unchanged:
         typer.echo(f"  skill ok       {name}")
 
@@ -140,7 +147,14 @@ def sync(
                 typer.echo("  no llms.txt found for remaining packages")
 
     if not any(
-        [result.added, result.updated, result.removed, result.unchanged, to_install]
+        [
+            result.added,
+            result.updated,
+            result.removed,
+            result.unchanged,
+            result.skipped,
+            to_install,
+        ]
     ):
         typer.echo("No library skills found.")
 
@@ -162,6 +176,17 @@ def init(
         typer.echo("\n[dry-run] skipping artifact selection")
         return
     _select_and_install(MENU_KINDS, all_)
+
+    # Core is now in place. Offer the package-driven sync as an opt-in extra:
+    # it only adds skills shipped by installed deps and never touches the core.
+    if sys.stdin.isatty() and typer.confirm(
+        "\nAlso scan installed packages for skills to sync?", default=False
+    ):
+        _run_sync(all_=False, docs=True)
+
+    # Surface the opinionated tooling standard and write pre-commit if absent.
+    if (stack or "python") == "python":
+        _report_standards("python", write=True, dry_run=dry_run)
 
 
 @app.command()
@@ -478,6 +503,76 @@ def check(
         raise typer.Exit(1)
 
 
+# ── standards ─────────────────────────────────────────────────────────────────
+
+_STATUS_LABEL = {
+    "ok": "ok",
+    "missing": "missing",
+    "differs": "differs (not overwritten)",
+    "no-pyproject": "no pyproject.toml yet",
+}
+
+
+def _report_standards(stack: str, *, write: bool, dry_run: bool) -> None:
+    """Report how the repo's tooling compares to the standard; may write pre-commit."""
+    typer.echo(f"\nTooling standard ({stack}):")
+
+    pc = standards_mod.compare_precommit(stack)
+    if pc == "missing" and write:
+        standards_mod.write_precommit(stack, dry_run)
+        prefix = "[dry-run] " if dry_run else ""
+        typer.echo(f"  pre-commit     {prefix}wrote {standards_mod.PRECOMMIT}")
+        typer.echo("                 run `uv run pre-commit install` to enable it")
+    elif pc == "missing":
+        typer.echo("  pre-commit     missing (run `wingman standards --write`)")
+    elif pc == "differs":
+        typer.echo("  pre-commit     differs from standard (not overwritten)")
+    else:
+        typer.echo("  pre-commit     ok")
+
+    categories = standards_mod.compare_pyproject(stack)
+    for cs in categories:
+        typer.echo(f"  [tool.{cs.name}]".ljust(17) + _STATUS_LABEL[cs.status])
+
+    unpinned = standards_mod.unpinned_dependencies()
+    if unpinned:
+        typer.echo(
+            f"  dependencies   {len(unpinned)} without a version: {', '.join(unpinned)}"
+        )
+    else:
+        typer.echo("  dependencies   ok (all pinned)")
+
+    if any(cs.status != "ok" for cs in categories):
+        typer.echo(
+            "  → run `wingman standards --show` for the canonical tool block to paste"
+        )
+
+
+@app.command()
+def standards(
+    stack: StackArg = "python",
+    show: Annotated[
+        bool,
+        typer.Option(
+            "--show", help="Print the canonical pyproject tool block and exit."
+        ),
+    ] = False,
+    write: Annotated[
+        bool,
+        typer.Option(
+            "--write",
+            help="Write .pre-commit-config.yaml if absent (never overwrites).",
+        ),
+    ] = False,
+    dry_run: DryRun = False,
+) -> None:
+    """Report how this repo's tooling differs from wingman's opinionated standard."""
+    if show:
+        typer.echo(standards_mod.pyproject_tools_text(stack), nl=False)
+        return
+    _report_standards(stack, write=write, dry_run=dry_run)
+
+
 # ── audit ─────────────────────────────────────────────────────────────────────
 
 
@@ -530,28 +625,84 @@ def audit(
 
 # ── new (scaffolding) ─────────────────────────────────────────────────────────
 
-new_app = typer.Typer(
-    help="Scaffold prompts, agents, and documents.", no_args_is_help=True
-)
-app.add_typer(new_app, name="new")
+_TEMPLATE_MAP = {
+    "story": ("agile/story.md", "docs/stories", "{slug}.md"),
+    "epic": ("agile/epic.md", "docs/epics", "{slug}.md"),
+    "bug": ("agile/bug.md", "docs/bugs", "{slug}.md"),
+    "spike": ("agile/spike.md", "docs/spikes", "{slug}.md"),
+    "adr": ("decisions/adr.md", "docs/decisions", "{number:04d}-{slug}.md"),
+    "post-mortem": ("engineering/post-mortem.md", "docs/post-mortems", "{slug}.md"),
+    "runbook": ("engineering/runbook.md", "docs/runbooks", "{slug}.md"),
+    "changelog": ("changelog.md", ".", "CHANGELOG.md"),
+    "ci": ("ci-github.yml", ".github/workflows", "ci.yml"),
+}
+
+# kind -> one-line description, shown by `wingman new` with no arguments.
+_KIND_HELP = {
+    "prompt": ".github/prompts/<name>.prompt.md slash-command prompt",
+    "agent": ".github/agents/<name>.agent.md custom agent",
+    "story": "agile story",
+    "epic": "agile epic",
+    "bug": "bug report",
+    "spike": "spike",
+    "adr": "architecture decision record",
+    "post-mortem": "post-mortem",
+    "runbook": "operational runbook",
+    "changelog": "Keep a Changelog CHANGELOG.md",
+    "ci": "secure GitHub Actions CI workflow",
+}
+_NEW_KINDS = ["prompt", "agent", *_TEMPLATE_MAP]
 
 
-@new_app.command("prompt")
-def new_prompt(
-    name: Annotated[str, typer.Argument(help="Prompt name, e.g. 'review'")],
+@app.command()
+def new(
+    kind: Annotated[
+        str | None,
+        typer.Argument(help=f"What to scaffold: {', '.join(_NEW_KINDS)}"),
+    ] = None,
+    name: Annotated[
+        str | None,
+        typer.Argument(help="Name (prompt/agent) or title (docs that need a slug)"),
+    ] = None,
 ) -> None:
-    """Scaffold a .github/prompts/<name>.prompt.md file."""
+    """Scaffold a prompt, agent, or document from a template.
+
+    Run `wingman new` with no arguments to list every kind. Examples:
+    `wingman new prompt review`, `wingman new agent data-analyst`,
+    `wingman new adr "use postgres over mongodb"`, `wingman new ci`.
+    """
+    if kind is None:
+        typer.echo("Usage: wingman new <kind> [name]\n\nKinds:")
+        for k in _NEW_KINDS:
+            typer.echo(f"  {k:<12} {_KIND_HELP[k]}")
+        return
+    if kind == "prompt":
+        _new_prompt(name)
+    elif kind == "agent":
+        _new_agent(name)
+    elif kind in _TEMPLATE_MAP:
+        _new_from_template(kind, name)
+    else:
+        typer.echo(
+            f"Unknown kind '{kind}'. Choose from: {', '.join(_NEW_KINDS)}", err=True
+        )
+        raise typer.Exit(1)
+
+
+def _new_prompt(name: str | None) -> None:
+    if not name:
+        typer.echo("'prompt' needs a name argument.", err=True)
+        raise typer.Exit(1)
     path = repo_root() / ".github" / "prompts" / f"{name}.prompt.md"
     _scaffold(
         path, '---\ndescription: "TODO: when to use this"\n---\n\nTODO: prompt body\n'
     )
 
 
-@new_app.command("agent")
-def new_agent(
-    name: Annotated[str, typer.Argument(help="Agent name, e.g. 'data-analyst'")],
-) -> None:
-    """Scaffold a .github/agents/<name>.agent.md custom agent file."""
+def _new_agent(name: str | None) -> None:
+    if not name:
+        typer.echo("'agent' needs a name argument.", err=True)
+        raise typer.Exit(1)
     path = repo_root() / ".github" / "agents" / f"{name}.agent.md"
     _scaffold(
         path,
@@ -562,36 +713,15 @@ def new_agent(
     )
 
 
-_TEMPLATE_MAP = {
-    "story": ("agile/story.md", "docs/stories", "{slug}.md"),
-    "epic": ("agile/epic.md", "docs/epics", "{slug}.md"),
-    "bug": ("agile/bug.md", "docs/bugs", "{slug}.md"),
-    "spike": ("agile/spike.md", "docs/spikes", "{slug}.md"),
-    "adr": ("decisions/adr.md", "docs/decisions", "{number:04d}-{slug}.md"),
-    "post-mortem": ("engineering/post-mortem.md", "docs/post-mortems", "{slug}.md"),
-    "runbook": ("engineering/runbook.md", "docs/runbooks", "{slug}.md"),
-}
-
-
-@new_app.command("doc")
-def new_doc(
-    kind: Annotated[
-        str, typer.Argument(help=f"Document type: {', '.join(_TEMPLATE_MAP)}")
-    ],
-    title: Annotated[
-        str, typer.Argument(help="Title, e.g. 'use postgres over mongodb'")
-    ],
-) -> None:
-    """Create a document from a bundled template."""
-    if kind not in _TEMPLATE_MAP:
-        typer.echo(
-            f"Unknown kind '{kind}'. Choose from: {', '.join(_TEMPLATE_MAP)}", err=True
-        )
+def _new_from_template(kind: str, title: str | None) -> None:
+    template_rel, dest_dir, filename_pattern = _TEMPLATE_MAP[kind]
+    needs_title = "{slug}" in filename_pattern or "{title}" in template_rel
+    if needs_title and not title:
+        typer.echo(f"'{kind}' needs a title argument.", err=True)
         raise typer.Exit(1)
 
-    template_rel, dest_dir, filename_pattern = _TEMPLATE_MAP[kind]
     template_path = data_path() / "templates" / template_rel
-    slug = title.lower().replace(" ", "-").replace("/", "-")
+    slug = (title or "").lower().replace(" ", "-").replace("/", "-")
     today = _dt.date.today().isoformat()
 
     dest = repo_root() / dest_dir
@@ -605,7 +735,7 @@ def new_doc(
 
     content = (
         template_path.read_text()
-        .replace("{title}", title)
+        .replace("{title}", title or "")
         .replace("{date}", today)
         .replace("{number}", f"{number:04d}" if number else "")
     )

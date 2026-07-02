@@ -161,6 +161,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Wingman: local braindump / scratch planning, not for publication. The
+# published plan lives in docs/plan.md.
+wingman_overview_plan.md
+
 # Wingman: vendored third-party skill bodies (fetched via `wingman skill add`).
 # Reproducible from .wingman/skills.toml + skills.lock, so restore with
 # `wingman skill update`. The manifest and lock ARE committed; the payload is not.

@@ -10,7 +10,7 @@ from wingman import check
 def test_load_bundled_python_checks(repo):
     checks = check.load_checks("python")
     names = [c.name for c in checks]
-    assert names == ["lint", "format", "test"]
+    assert names == ["lint", "format", "types", "test", "security"]
 
 
 def test_local_checks_override_bundled(repo):

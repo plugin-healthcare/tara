@@ -49,23 +49,28 @@ wingman check           # run the lint/format/test gate
 wingman audit           # lint your skills/agents/instructions for best practices
 ```
 
+Once the files are in place, see
+[`docs/using-in-copilot.md`](docs/using-in-copilot.md) for how GitHub Copilot
+picks up each artifact (instructions, skills, agents, prompts, MCP) while you
+code.
+
 ## Commands
 
-| Command | What it does |
-| --- | --- |
-| `wingman init [stack]` | Write `.github/copilot-instructions.md` and `.mcp.json`, then open a menu to pick skill themes, agents, prompts, instructions, and MCP servers. Stack defaults to `python`. |
-| `wingman add` | Re-open the catalog menu to install more artifacts. |
-| `wingman sync [--all] [--no-docs]` | Discover skills bundled in installed packages and copy them in; for packages with a known skill theme, fetch those; for the rest, probe PyPI for an `llms.txt` and wire it into the `docs` MCP server. |
-| `wingman list` | Show what Copilot will pick up: always-on instructions, scoped instructions, slash-command prompts, agents, and skills. |
-| `wingman skill add <theme\|git-url>` | Fetch skills into `.github/skills/<name>/`. Use a **theme** name (e.g. `duckdb`) to install all its skills, or a git URL with `--path` (and optional `--ref`) for a one-off. |
-| `wingman skill list` | List installed skills. Add `--all` to also show available themes. |
-| `wingman skill update [name]` | Re-fetch one or all skills to their latest commit. |
-| `wingman skill remove <name>` | Delete a skill from disk and the manifest. |
-| `wingman agent list` | List bundled agents and whether each is installed in this repo. |
-| `wingman agent add <name>` | Install a bundled agent (e.g. `yoda`, `marvin`) into `.github/agents/`. |
-| `wingman check [stack]` | Run the lint/format/test gate. |
-| `wingman audit [paths…]` | Lint guardrail artifacts. `--deep` adds an LLM content review via the Copilot CLI; `--strict` fails on warnings too. |
-| `wingman new prompt\|agent\|doc …` | Scaffold a prompt, agent, or document from a template. |
+Full reference (every command, flag, and argument) is auto-generated in
+[`docs/cli.md`](docs/cli.md); refresh it with
+`uv run python scripts/gen_cli_docs.py`. The essentials:
+
+- **Setup:** `wingman init` (write instructions + `.mcp.json`, pick artifacts),
+  `wingman add` (re-open the picker), `wingman sync` (pull skills/docs from
+  installed packages).
+- **Inspect:** `wingman list` (what Copilot will pick up).
+- **Skills & agents:** `wingman skill add|list|update|remove`,
+  `wingman agent list|add`.
+- **Quality gate:** `wingman check` (ruff, `ty`, pytest, `uv audit`),
+  `wingman standards` (compare tooling to the opinionated baseline),
+  `wingman audit` (lint guardrail artifacts).
+- **Scaffold:** `wingman new [kind] [name]` (prompt, agent, or a document such as
+  `adr`, `runbook`, `changelog`, `ci`). Run `wingman new` to list kinds.
 
 ## What gets written into your repo
 
@@ -87,44 +92,17 @@ wingman audit           # lint your skills/agents/instructions for best practice
 
 ## MCP setup
 
-Wingman writes the repo-root `.mcp.json` (the editor-agnostic location the
-**GitHub Copilot CLI** reads, using a top-level `mcpServers` object). MCP servers
-are **opt-in**: `wingman init` / `wingman add` show a picker so you choose which to
-wire in (a couple are pre-checked as sensible defaults). Selecting a server merges
-it into `.mcp.json`, keeping any servers already there. Available servers:
+Wingman writes the repo-root `.mcp.json` (the `mcpServers` schema the **GitHub
+Copilot CLI** reads). Servers are **opt-in**: `wingman init` / `wingman add` show a
+picker. Bundled servers are `github` and `git` (defaults), plus `polars` and
+`likec4`; `wingman sync --docs` can wire in a `docs` server from a package's
+`llms.txt`. Add repo-local servers in `.wingman/mcp.local.json`.
 
-| Server | Transport | Default | What it gives Copilot |
-| --- | --- | --- | --- |
-| `github` | http (`api.githubcopilot.com`) | ✓ | Issues, PRs, repos, code search |
-| `git` | stdio (`uvx mcp-server-git`) | ✓ | Git operations on the current repo |
-| `polars` | http (`mcp.pola.rs`) | — | Polars API and docs knowledge |
-| `likec4` | stdio (`npx @likec4/mcp`) | — | Query your LikeC4 architecture model |
-
-Enabling a non-default `[remote]` server (e.g. `polars`) prints a warning that its
-request payload, which the model composes and may pack with your data, goes to a
-third party. See [`docs/mcp.md`](docs/mcp.md) for the full privacy breakdown.
-
-> **Using VS Code?** VS Code's Copilot does **not** read the root `.mcp.json` — it
-> only reads `.vscode/mcp.json`, which uses a different top-level key (`servers`
-> instead of `mcpServers`). To use these servers inside the VS Code editor, copy the
-> server entries into `.vscode/mcp.json` under a `servers` key, or run **MCP: Add
-> Server** from the Command Palette and choose **Workspace**. The Copilot CLI and the
-> Copilot coding agent do not need this; only the VS Code editor does.
-
-stdio servers operate on their **launch directory** (the repo), so they work outside
-VS Code too. Wingman deliberately avoids the VS Code-only `${workspaceFolder}`
-variable: `mcp-server-git` and `@likec4/mcp` both default to the current directory,
-which the MCP host sets to your repo root.
-
-Add repo-local servers in `.wingman/mcp.local.json`; Wingman merges them in. The
-`docs` server (`uvx mcpdoc`) is wired in on demand by `wingman sync --docs`, which
-probes packages for an `llms.txt` and serves it over MCP. Other optional servers that
-need a token include [`pydantic/logfire-mcp`](https://github.com/pydantic/logfire-mcp)
-and [`motherduckdb/mcp-server-motherduck`](https://github.com/motherduckdb/mcp-server-motherduck).
-
-Note: the **Copilot coding agent** (the cloud agent) reads its MCP configuration
-from your repository's Copilot settings on GitHub, not from a committed file.
-Wingman cannot write that for you; configure it in the repo settings UI.
+Remote servers send tool-call arguments to a third party, so enabling one prints
+a warning. VS Code reads `.vscode/mcp.json` (not the root file), and the Copilot
+coding agent reads its config from repo settings on GitHub. See
+[`docs/mcp.md`](docs/mcp.md) for the full server list, transport details, and
+privacy breakdown.
 
 ## Skills
 
@@ -182,9 +160,20 @@ name = "format"
 cmd = "uv run ruff format --check"
 
 [[check]]
+name = "types"
+cmd = "uv run ty check ."
+
+[[check]]
 name = "test"
 cmd = "uv run pytest --tb=short"
+
+[[check]]
+name = "security"
+cmd = "uv audit --preview-features audit-command"
 ```
+
+The `types` and `security` steps need uv >= 0.11. `uv audit` reports known CVEs
+and PEP 792 adverse project statuses (archived / deprecated / quarantined).
 
 It stops on the first failure (use `--no-fail-fast` to run them all) and exits
 non-zero if any check fails, so it works as a pre-commit or CI gate.
