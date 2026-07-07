@@ -90,6 +90,30 @@ Full reference (every command, flag, and argument) is auto-generated in
   mcp.local.json                   # optional: merged into .mcp.json
 ```
 
+## opencode
+
+Copilot's `.github/` setup is the single source of truth. opencode files are a
+generated **port** of it, so there's only ever one copy to maintain:
+
+```bash
+wingman init --tool opencode   # set up Copilot, then port it to opencode
+wingman init --tool all        # same as --tool opencode
+wingman opencode sync          # re-port after changing .github/ (run anytime)
+```
+
+The port writes (all derived, never hand-edited):
+
+```
+opencode.json          # references .github/copilot-instructions.md + MCP servers
+.opencode/agents/*.md   # translated from .github/agents/*.agent.md
+.opencode/commands/*.md # translated from .github/prompts/**/*.prompt.md
+.opencode/skills/<name>/ # mirrored from .github/skills/<name>/
+```
+
+Edit the Copilot side (or wingman's bundled standard) and re-run
+`wingman opencode sync`. The default `wingman init` (`--tool copilot`) skips the
+port entirely.
+
 ## MCP setup
 
 Wingman writes the repo-root `.mcp.json` (the `mcpServers` schema the **GitHub

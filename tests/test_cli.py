@@ -70,3 +70,47 @@ def test_new_doc_adr_with_title(repo):
     assert result.exit_code == 0
     adr = repo / "docs" / "decisions" / "0001-use-postgres-over-mongodb.md"
     assert adr.is_file()
+
+
+def test_init_opencode_ports_from_copilot(repo):
+    result = runner.invoke(app, ["init", "--tool", "opencode", "--all"])
+    assert result.exit_code == 0, result.output
+    # opencode is a port of the Copilot setup, so Copilot files exist too.
+    assert (repo / ".github" / "copilot-instructions.md").is_file()
+    assert (repo / ".mcp.json").is_file()
+    # No duplicate AGENTS.md; opencode.json references the Copilot instructions.
+    assert not (repo / "AGENTS.md").exists()
+    config = repo / "opencode.json"
+    assert config.is_file()
+    assert ".github/copilot-instructions.md" in config.read_text()
+
+
+def test_init_all_matches_opencode_port(repo):
+    result = runner.invoke(app, ["init", "--tool", "all", "--all"])
+    assert result.exit_code == 0, result.output
+    assert (repo / "opencode.json").is_file()
+    assert (repo / ".github" / "copilot-instructions.md").is_file()
+    assert (repo / ".mcp.json").is_file()
+
+
+def test_init_copilot_default_does_not_port(repo):
+    result = runner.invoke(app, ["init", "--all"])
+    assert result.exit_code == 0, result.output
+    assert (repo / ".github" / "copilot-instructions.md").is_file()
+    assert not (repo / "opencode.json").exists()
+
+
+def test_init_rejects_unknown_tool(repo):
+    result = runner.invoke(app, ["init", "--tool", "vim"])
+    assert result.exit_code == 1
+    assert "unknown tool" in result.output
+
+
+def test_opencode_sync_ports_installed_agents(repo):
+    runner.invoke(app, ["agent", "add", "yoda"])
+    result = runner.invoke(app, ["opencode", "sync"])
+    assert result.exit_code == 0, result.output
+    translated = repo / ".opencode" / "agents" / "yoda.md"
+    assert translated.is_file()
+    assert "mode: subagent" in translated.read_text()
+    assert (repo / ".opencode" / "commands" / "check.md").is_file()
