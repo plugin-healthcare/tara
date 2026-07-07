@@ -9,6 +9,7 @@ agent (``.github/agents/skill-reviewer.agent.md``).
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -295,6 +296,80 @@ def audit_instructions(path: Path) -> list[Finding]:
     return out
 
 
+# ── MCP config (.mcp.json / .wingman/mcp.local.json) ──────────────────────────
+
+# Package runners that fetch-and-execute: without a version pin they run
+# whatever the registry serves at launch time, so a pinned spec is required.
+_PKG_RUNNERS = frozenset({"uvx", "npx", "pnpm", "pnpx", "bunx", "pipx"})
+# Flags whose *next* token (or `flag=value`) names the package to run, rather
+# than the first positional (e.g. `uvx --from pkg tool`, `npx -p pkg cmd`).
+_PKG_VALUE_FLAGS = ("--from", "--package", "-p", "--with", "-w")
+
+MCP_CONFIGS = (Path(".mcp.json"), Path(".wingman") / "mcp.local.json")
+
+
+def _runner_package(args: list[str]) -> str | None:
+    """The package specifier a runner will fetch and run, or None if not found."""
+    for i, tok in enumerate(args):
+        for flag in _PKG_VALUE_FLAGS:
+            if tok == flag and i + 1 < len(args):
+                return args[i + 1]
+            if tok.startswith(f"{flag}="):
+                return tok.split("=", 1)[1]
+        if not tok.startswith("-"):
+            return tok  # first positional is the package to run
+    return None
+
+
+def _has_version_pin(spec: str) -> bool:
+    """True if a runner package specifier declares a version or direct reference."""
+    spec = spec.strip()
+    if not spec:
+        return False
+    if "==" in spec or spec.startswith(("git+", "http://", "https://", ".", "/")):
+        return True
+    body = spec[1:] if spec.startswith("@") else spec  # drop npm scope leader
+    _, sep, version = body.partition("@")
+    return bool(sep and version)
+
+
+def _mcp_servers(raw: dict) -> dict:
+    return raw.get("mcpServers") or raw.get("servers") or {}
+
+
+def audit_mcp_config(path: Path) -> list[Finding]:
+    """Flag stdio MCP servers launched via an unpinned package runner."""
+    try:
+        raw = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        return [Finding(path, ERROR, f"invalid JSON: {exc.msg}")]
+    out: list[Finding] = []
+    for name, config in _mcp_servers(raw).items():
+        command = (config or {}).get("command")
+        if not command:
+            continue  # remote/http server: nothing to pin
+        if Path(command).name not in _PKG_RUNNERS:
+            continue
+        spec = _runner_package(config.get("args", []))
+        if spec is None or _has_version_pin(spec):
+            continue
+        out.append(
+            Finding(
+                path,
+                WARNING,
+                f"MCP server '{name}' launches unpinned '{spec}' via "
+                f"{Path(command).name}; pin a version (e.g. '{spec}@<version>')",
+            )
+        )
+    return out
+
+
+def mcp_config_paths(root: Path | None = None) -> list[Path]:
+    """Existing MCP config files under a repo."""
+    base = root or repo_root()
+    return [base / rel for rel in MCP_CONFIGS if (base / rel).is_file()]
+
+
 # ── Discovery + orchestration ─────────────────────────────────────────────────
 
 
@@ -330,8 +405,12 @@ def audit_path(path: Path, kind: str | None = None) -> list[Finding]:
             kind = "skill"
         elif path.name.endswith(".agent.md"):
             kind = "agent"
+        elif path.name == ".mcp.json" or path.name == "mcp.local.json":
+            kind = "mcp"
         else:
             kind = "instructions"
+    if kind == "mcp":
+        return audit_mcp_config(path)
     return _AUDITORS[kind](path)
 
 
@@ -339,6 +418,8 @@ def audit_all(root: Path | None = None) -> list[Finding]:
     findings: list[Finding] = []
     for path, kind in discover(root):
         findings += audit_path(path, kind)
+    for path in mcp_config_paths(root):
+        findings += audit_mcp_config(path)
     return findings
 
 

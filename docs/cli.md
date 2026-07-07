@@ -150,7 +150,7 @@ $ wingman standards [OPTIONS] [STACK]
 
 ## `wingman audit`
 
-Lint Copilot guardrail artifacts (skills, agents, instructions).
+Lint Copilot guardrail artifacts (skills, agents, instructions) + MCP config.
 
 **Usage**:
 

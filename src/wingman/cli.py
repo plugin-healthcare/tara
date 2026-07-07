@@ -590,16 +590,19 @@ def audit(
         bool, typer.Option("--strict", help="Exit non-zero on warnings too.")
     ] = False,
 ) -> None:
-    """Lint Copilot guardrail artifacts (skills, agents, instructions)."""
+    """Lint Copilot guardrail artifacts (skills, agents, instructions) + MCP config."""
     if paths:
         findings = [f for p in paths for f in audit_mod.audit_path(p)]
         targets = paths
     else:
         findings = audit_mod.audit_all()
-        targets = [p for p, _ in audit_mod.discover()]
+        targets = [p for p, _ in audit_mod.discover()] + audit_mod.mcp_config_paths()
 
     if not targets:
-        typer.echo("No artifacts found under .github/ (skills, agents, instructions).")
+        typer.echo(
+            "No artifacts found under .github/ (skills, agents, instructions) "
+            "or MCP config (.mcp.json)."
+        )
         return
 
     if findings:

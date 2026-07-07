@@ -10,6 +10,11 @@
 #   [servers.<name>.config]       # written verbatim into .mcp.json
 #   type = "http"                 # or command/args for stdio servers
 #   url  = "https://…"
+#
+# Stdio servers launched via a package runner (uvx/npx) MUST pin a version
+# (e.g. `mcp-server-git@2026.6.16`, `@likec4/mcp@1.58.0`); an unpinned runner
+# fetches and executes whatever the registry serves at launch time. `wingman
+# audit` flags unpinned entries in .mcp.json / .wingman/mcp.local.json.
 
 [servers.github]
 description = "GitHub API: issues, PRs, and code search (Copilot-hosted)."
@@ -23,7 +28,7 @@ description = "Local git: history, blame, and diff on the current repo."
 default = true
 [servers.git.config]
 command = "uvx"
-args = ["mcp-server-git"]
+args = ["mcp-server-git@2026.6.16"]
 
 [servers.polars]
 description = "Polars dataframe API help and documentation."
@@ -35,4 +40,4 @@ url = "https://mcp.pola.rs/mcp"
 description = "Query your LikeC4 architecture model in natural language."
 [servers.likec4.config]
 command = "npx"
-args = ["-y", "@likec4/mcp"]
+args = ["-y", "@likec4/mcp@1.58.0"]
