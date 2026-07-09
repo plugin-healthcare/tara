@@ -1,14 +1,17 @@
-"""wingman CLI — a GitHub Copilot guardrail toolkit.
+"""wingman CLI — a GitHub Copilot + opencode guardrail toolkit.
 
 Installed per-repo. Every command operates on the current working directory.
+Copilot's .github/ setup is the single source of truth; opencode files are a
+generated port of it.
 Commands:
-  init    write copilot-instructions.md + .mcp.json, then pick artifacts
-  add     pick and install more catalog artifacts (skills/agents/prompts/instructions)
-  skill   manage skills directly (add/list/update/remove)
-  agent   manage bundled agents directly (list/add)
-  check   run the project's lint/format/test gate
-  audit   lint guardrail artifacts (add --deep for an LLM content review)
-  new     scaffold a prompt, agent, or document from a template
+  init      write instructions + MCP + pick items; --tool opencode|all also ports
+  add       pick and install more catalog artifacts (skills/agents/prompts/instructions)
+  skill     manage skills directly (add/list/update/remove)
+  agent     manage bundled agents directly (list/add)
+  opencode  port the Copilot setup into opencode files (opencode.json + .opencode/)
+  check     run the project's lint/format/test gate
+  audit     lint guardrail artifacts (add --deep for an LLM content review)
+  new       scaffold a prompt, agent, or document from a template
 """
 
 from __future__ import annotations
@@ -24,13 +27,17 @@ from wingman import audit as audit_mod
 from wingman import catalog as catalog_mod
 from wingman import check as check_mod
 from wingman import docs as docs_mod
+from wingman import opencode as opencode_mod
 from wingman import review as review_mod
 from wingman import skills as skills_mod
 from wingman import standards as standards_mod
 from wingman import sync as sync_mod
 from wingman.core import (
+    ALL_TOOLS,
+    OPENCODE,
     data_path,
     repo_root,
+    validate_tool,
     write_instructions,
     write_mcp,
 )
@@ -45,6 +52,13 @@ StackArg = Annotated[str, typer.Argument(help="Stack (default: python)")]
 DryRun = Annotated[bool, typer.Option("--dry-run", help="Preview without writing.")]
 AllOpt = Annotated[
     bool, typer.Option("--all", help="Select every catalog item (non-interactive).")
+]
+ToolOpt = Annotated[
+    str,
+    typer.Option(
+        "--tool",
+        help="Also port to opencode: copilot (default, no port), opencode, or all.",
+    ),
 ]
 
 MENU_KINDS = ["skills", "agents", "prompts", "instructions", "mcp"]
@@ -165,15 +179,31 @@ def _run_sync(all_: bool, docs: bool) -> None:
 @app.command()
 def init(
     stack: StackArg = "python",
+    tool: ToolOpt = "copilot",
     all_: AllOpt = False,
     dry_run: DryRun = False,
 ) -> None:
-    """Set up Copilot in this repo: write instructions + MCP, then pick artifacts."""
-    typer.echo(f"Setting up Copilot for stack: {stack}")
+    """Set up this repo: write Copilot instructions + MCP, then pick artifacts.
+
+    Copilot's .github/ setup is always the source. ``--tool opencode`` or
+    ``--tool all`` additionally port that setup into opencode files
+    (opencode.json + .opencode/); ``--tool copilot`` (default) skips the port.
+    """
+    try:
+        tool = validate_tool(tool)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    port = tool in (OPENCODE, ALL_TOOLS)
+    typer.echo(f"Setting up copilot for stack: {stack}")
     typer.echo(write_instructions(stack, dry_run))
     typer.echo(write_mcp(stack, dry_run))
+
     if dry_run:
         typer.echo("\n[dry-run] skipping artifact selection")
+        if port:
+            _echo_port(dry_run=True)
         return
     _select_and_install(MENU_KINDS, all_)
 
@@ -187,6 +217,18 @@ def init(
     # Surface the opinionated tooling standard and write pre-commit if absent.
     if (stack or "python") == "python":
         _report_standards("python", write=True, dry_run=dry_run)
+
+    if port:
+        _echo_port(dry_run=False)
+
+
+def _echo_port(dry_run: bool) -> None:
+    """Port the Copilot setup into opencode files, echoing each section."""
+    typer.echo("\nPorting Copilot setup to opencode:")
+    for title, lines in opencode_mod.port_all(dry_run):
+        typer.echo(f"{title}:")
+        for line in lines or ["  (nothing to port)"]:
+            typer.echo(line)
 
 
 @app.command()
@@ -477,6 +519,28 @@ def agent_add(
         )
         raise typer.Exit(1)
     typer.echo(catalog_mod.install_item(item).strip())
+
+
+# ── opencode ──────────────────────────────────────────────────────────────────
+
+opencode_app = typer.Typer(
+    help="Port the Copilot setup into opencode files (opencode.json + .opencode/).",
+    no_args_is_help=True,
+)
+app.add_typer(opencode_app, name="opencode")
+
+
+@opencode_app.command("sync")
+def opencode_sync(
+    dry_run: DryRun = False,
+) -> None:
+    """Port the Copilot .github/ setup into opencode files.
+
+    Regenerates opencode.json (referencing .github/copilot-instructions.md +
+    MCP servers from .mcp.json) and mirrors .github/ agents, prompts, and skills
+    into .opencode/. Safe to re-run; the Copilot side stays the source of truth.
+    """
+    _echo_port(dry_run=dry_run)
 
 
 # ── check ─────────────────────────────────────────────────────────────────────

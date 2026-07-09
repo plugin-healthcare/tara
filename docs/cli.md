@@ -20,7 +20,7 @@ $ wingman [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `sync`: Sync skills (and optionally docs) from...
-* `init`: Set up Copilot in this repo: write...
+* `init`: Set up this repo: write Copilot...
 * `add`: Pick and install catalog artifacts...
 * `list`: Show the Copilot triggers active in this...
 * `check`: Run the project's lint/format/test gate.
@@ -29,6 +29,7 @@ $ wingman [OPTIONS] COMMAND [ARGS]...
 * `new`: Scaffold a prompt, agent, or document from...
 * `skill`: Manage Copilot skills (.github/skills/).
 * `agent`: Manage Copilot agents (.github/agents/).
+* `opencode`: Port the Copilot setup into opencode files...
 
 ## `wingman sync`
 
@@ -61,7 +62,11 @@ $ wingman sync [OPTIONS]
 
 ## `wingman init`
 
-Set up Copilot in this repo: write instructions + MCP, then pick artifacts.
+Set up this repo: write Copilot instructions + MCP, then pick artifacts.
+
+Copilot's .github/ setup is always the source. ``--tool opencode`` or
+``--tool all`` additionally port that setup into opencode files
+(opencode.json + .opencode/); ``--tool copilot`` (default) skips the port.
 
 **Usage**:
 
@@ -75,6 +80,7 @@ $ wingman init [OPTIONS] [STACK]
 
 **Options**:
 
+* `--tool TEXT`: Also port to opencode: copilot (default, no port), opencode, or all.  [default: copilot]
 * `--all`: Select every catalog item (non-interactive).
 * `--dry-run`: Preview without writing.
 * `--help`: Show this message and exit.
@@ -333,6 +339,43 @@ $ wingman agent add [OPTIONS] NAME
 
 **Options**:
 
+* `--help`: Show this message and exit.
+
+## `wingman opencode`
+
+Port the Copilot setup into opencode files (opencode.json + .opencode/).
+
+**Usage**:
+
+```console
+$ wingman opencode [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `sync`: Port the Copilot .github/ setup into...
+
+### `wingman opencode sync`
+
+Port the Copilot .github/ setup into opencode files.
+
+Regenerates opencode.json (referencing .github/copilot-instructions.md +
+MCP servers from .mcp.json) and mirrors .github/ agents, prompts, and skills
+into .opencode/. Safe to re-run; the Copilot side stays the source of truth.
+
+**Usage**:
+
+```console
+$ wingman opencode sync [OPTIONS]
+```
+
+**Options**:
+
+* `--dry-run`: Preview without writing.
 * `--help`: Show this message and exit.
 
 

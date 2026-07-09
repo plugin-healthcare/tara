@@ -18,6 +18,24 @@ COPILOT_INSTRUCTIONS = Path(".github") / "copilot-instructions.md"
 # `mcpServers` schema key. Not VS Code's `.vscode/mcp.json`.
 MCP_CONFIG = Path(".mcp.json")
 
+# opencode output (relative to the repo being set up). opencode.json references
+# the Copilot instruction file directly, so no duplicate AGENTS.md is written.
+OPENCODE_CONFIG = Path("opencode.json")
+
+# ── Tool selection ────────────────────────────────────────────────────────────
+
+COPILOT = "copilot"
+OPENCODE = "opencode"
+ALL_TOOLS = "all"
+VALID_TOOLS = (COPILOT, OPENCODE, ALL_TOOLS)
+
+
+def validate_tool(tool: str) -> str:
+    """Return ``tool`` if it is a recognised ``--tool`` value, else raise ValueError."""
+    if tool not in VALID_TOOLS:
+        raise ValueError(f"unknown tool '{tool}'; choose from {', '.join(VALID_TOOLS)}")
+    return tool
+
 
 def data_path() -> Path:
     """On-disk path to bundled package data (``wingman/data``)."""
@@ -100,6 +118,39 @@ def write_instructions(stack: str | None, dry_run: bool) -> str:
 def write_mcp(stack: str | None, dry_run: bool) -> str:
     content = json.dumps({"mcpServers": merged_servers(stack)}, indent=2) + "\n"
     return _write(MCP_CONFIG, content, dry_run)
+
+
+# ── opencode MCP schema translation ───────────────────────────────────────────
+
+OPENCODE_SCHEMA = "https://opencode.ai/config.json"
+
+
+def _to_opencode_server(config: dict) -> dict:
+    """Translate one Copilot-schema MCP server into opencode's schema.
+
+    Copilot/`.mcp.json` uses ``{command, args, env}`` for stdio servers and
+    ``{type: "http", url, headers}`` for remote ones. opencode expects a
+    top-level ``mcp`` map whose entries are ``{type: "local", command: [...],
+    environment}`` or ``{type: "remote", url, headers}``.
+    """
+    if config.get("url") or config.get("type") == "http":
+        server: dict = {"type": "remote", "url": config.get("url", ""), "enabled": True}
+        if config.get("headers"):
+            server["headers"] = config["headers"]
+        return server
+
+    command = (
+        [config["command"], *config.get("args", [])] if config.get("command") else []
+    )
+    server = {"type": "local", "command": command, "enabled": True}
+    if config.get("env"):
+        server["environment"] = config["env"]
+    return server
+
+
+def to_opencode_mcp(servers: dict) -> dict:
+    """Translate a Copilot-schema server map into opencode's ``mcp`` map."""
+    return {name: _to_opencode_server(cfg) for name, cfg in servers.items()}
 
 
 def read_mcp_servers() -> dict:
