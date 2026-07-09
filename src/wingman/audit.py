@@ -345,12 +345,16 @@ def audit_mcp_config(path: Path) -> list[Finding]:
         return [Finding(path, ERROR, f"invalid JSON: {exc.msg}")]
     out: list[Finding] = []
     for name, config in _mcp_servers(raw).items():
-        command = (config or {}).get("command")
+        cfg = config or {}
+        command = cfg.get("command")
         if not command:
             continue  # remote/http server: nothing to pin
         if Path(command).name not in _PKG_RUNNERS:
             continue
-        spec = _runner_package(config.get("args", []))
+        args = cfg.get("args") or []
+        if not isinstance(args, list):
+            args = []
+        spec = _runner_package(args)
         if spec is None or _has_version_pin(spec):
             continue
         out.append(
