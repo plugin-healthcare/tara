@@ -165,6 +165,11 @@ __marimo__/
 # published plan lives in docs/plan.md.
 wingman_overview_plan.md
 
+# Wingman: maturity review + its execution plan. Internal working notes for
+# hardening the harness, not published docs.
+docs/maturity-review.md
+docs/maturity-execution-plan.md
+
 # Wingman: vendored third-party skill bodies (fetched via `wingman skill add`).
 # Reproducible from .wingman/skills.toml + skills.lock, so restore with
 # `wingman skill update`. The manifest and lock ARE committed; the payload is not.

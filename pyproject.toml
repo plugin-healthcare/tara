@@ -23,6 +23,7 @@ build-backend = "uv_build"
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.15.19",
+    "ty>=0.0.56",
 ]
 
 [tool.ruff]
@@ -37,3 +38,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ty.environment]
+# `scripts/` holds standalone helpers (e.g. gen_cli_docs) that tests import
+# after adding the dir to sys.path; tell ty to resolve modules there too.
+extra-paths = ["scripts"]

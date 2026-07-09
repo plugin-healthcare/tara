@@ -37,6 +37,11 @@ already launch in your repo, so `mcp-server-git` runs with no `--repository` and
 `@likec4/mcp` with no `LIKEC4_WORKSPACE`. This works in the CLI, the coding agent,
 and VS Code.
 
+Stdio servers launched via a package runner (`uvx`, `npx`) are version-pinned in
+the catalog (e.g. `mcp-server-git@2026.6.16`, `@likec4/mcp@1.58.0`) so a launch
+can't silently pull new code. `wingman audit` flags any unpinned runner entry in
+`.mcp.json` or `.wingman/mcp.local.json`.
+
 ## Privacy
 
 Local stdio servers (`git`, `likec4`, `docs`) do not upload your code. `mcpdoc`

@@ -30,6 +30,7 @@ def test_find_agent_unknown_returns_none(repo):
 
 def test_install_agent_copies_into_repo(repo):
     item = catalog.find_agent("yoda")
+    assert item is not None
     catalog.install_item(item)
     installed = repo / ".github" / "agents" / "yoda.agent.md"
     assert installed.is_file()
@@ -58,7 +59,7 @@ def test_install_mcp_merges_into_vscode_config(repo):
     data = json.loads((repo / core.MCP_CONFIG).read_text())
     assert "likec4" in data["mcpServers"]
     assert data["mcpServers"]["likec4"]["command"] == "npx"
-    assert data["mcpServers"]["likec4"]["args"] == ["-y", "@likec4/mcp"]
+    assert data["mcpServers"]["likec4"]["args"] == ["-y", "@likec4/mcp@1.58.0"]
     # No VS Code-only ${workspaceFolder}: LikeC4 defaults to the launch cwd.
     assert "env" not in data["mcpServers"]["likec4"]
 
