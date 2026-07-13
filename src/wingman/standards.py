@@ -10,6 +10,7 @@ it never edits an existing ``pyproject.toml`` (it only reports).
 from __future__ import annotations
 
 import re
+import subprocess
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,10 @@ PRECOMMIT = Path(".pre-commit-config.yaml")
 
 # pyproject [tool.<category>] tables wingman is opinionated about.
 PYPROJECT_CATEGORIES = ["ruff", "pytest", "ty", "uv"]
+
+# Dev tools the standard expects to be runnable via `uv run` and pre-commit.
+# `uv audit` is native to uv, so it needs no dependency of its own.
+DEV_TOOLS = ["ruff", "ty", "pytest", "pre-commit"]
 
 _VERSION_OP = re.compile(r"[<>=!~]")
 
@@ -101,6 +106,13 @@ def _is_pinned(req: str) -> bool:
 
 def unpinned_dependencies() -> list[str]:
     """Names of pyproject dependencies (incl. groups/extras) that lack a version."""
+    unpinned = {_requirement_name(r) for r in _all_requirements() if not _is_pinned(r)}
+    unpinned.discard("")
+    return sorted(unpinned)
+
+
+def _all_requirements() -> list[str]:
+    """Every requirement string in pyproject: deps, extras, and dependency groups."""
     path = repo_root() / PYPROJECT
     if not path.exists():
         return []
@@ -111,6 +123,37 @@ def unpinned_dependencies() -> list[str]:
         reqs += extra
     for group in (data.get("dependency-groups") or {}).values():
         reqs += [g for g in group if isinstance(g, str)]
-    unpinned = {_requirement_name(r) for r in reqs if not _is_pinned(r)}
-    unpinned.discard("")
-    return sorted(unpinned)
+    return reqs
+
+
+def declared_dependency_names() -> set[str]:
+    """Lower-cased names of every dependency declared in pyproject."""
+    return {_requirement_name(r).lower() for r in _all_requirements()} - {""}
+
+
+def missing_dev_tools() -> list[str]:
+    """Standard dev tools (ruff/ty/pytest/pre-commit) not yet declared as deps."""
+    if not (repo_root() / PYPROJECT).exists():
+        return []
+    have = declared_dependency_names()
+    return [t for t in DEV_TOOLS if t not in have]
+
+
+def add_dev_tools(tools: list[str], dry_run: bool = False) -> tuple[bool, str]:
+    """Add ``tools`` to the dev dependency group via ``uv add --dev``."""
+    if not tools:
+        return True, "no dev tools to add"
+    cmd = ["uv", "add", "--dev", *tools]
+    if dry_run:
+        return True, "[dry-run] " + " ".join(cmd)
+    proc = subprocess.run(cmd, cwd=repo_root())
+    return proc.returncode == 0, " ".join(cmd)
+
+
+def install_precommit_hook(dry_run: bool = False) -> tuple[bool, str]:
+    """Install the git pre-commit hook via ``uv run pre-commit install``."""
+    cmd = ["uv", "run", "pre-commit", "install"]
+    if dry_run:
+        return True, "[dry-run] " + " ".join(cmd)
+    proc = subprocess.run(cmd, cwd=repo_root())
+    return proc.returncode == 0, " ".join(cmd)

@@ -174,3 +174,6 @@ docs/maturity-execution-plan.md
 # Reproducible from .wingman/skills.toml + skills.lock, so restore with
 # `wingman skill update`. The manifest and lock ARE committed; the payload is not.
 .github/skills/
+
+# Wingman: agent memory / handover scratch, local only
+.agent/

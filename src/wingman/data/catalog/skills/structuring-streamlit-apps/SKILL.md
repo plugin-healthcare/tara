@@ -27,10 +27,10 @@ Then arrange the layout below and run it with `uv run streamlit run app.py`.
 <name>/
   pyproject.toml
   app.py                  # entrypoint: `streamlit run app.py`
-  pages/
-    views/                # page views: GLUE ONLY. compose components + backend.
-      1_overview.py
-      2_details.py
+  pages/ # page views: GLUE ONLY. compose components + backend.
+    __init__.py
+    1_overview.py
+    2_details.py
   components/             # reusable front-end pieces and plot builders
     __init__.py
     charts.py             # plots: take data, return a figure/chart
@@ -59,7 +59,7 @@ all a view does.
 - **`components/`**: reusable front-end pieces and plots. A plot function takes data
   (from `backend`) and returns a figure or chart; a component renders a reusable bit
   of UI. Keep data fetching and business rules out of here, that is `backend`'s job.
-- **`pages/views/`**: glue only. No transforms, no computations, no inline
+- **`pages/`**: glue only. No transforms, no computations, no inline
   components. If you are writing one in a view file, it belongs in `backend` (logic)
   or `components` (UI/plot).
 
@@ -70,7 +70,7 @@ them.
 
 - Cache expensive calls with `@st.cache_data` / `@st.cache_resource` at the view
   boundary, not inside the pure `backend/` functions.
-- Multipage: files under `pages/views/` become sidebar entries automatically; prefix
+-- Multipage: files under `pages/` become sidebar entries automatically; prefix
   with a number to order them.
 - `.streamlit/config.toml` holds theme and server config; do not hardcode it.
 
