@@ -1,8 +1,8 @@
 # Story: {title}
 
 ## User Story
-As a **{role}**,  
-I want to **{goal}**,  
+As a **{role}**,
+I want to **{goal}**,
 so that **{benefit}**.
 
 ## Acceptance Criteria

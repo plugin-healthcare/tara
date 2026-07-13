@@ -8,9 +8,9 @@
 - Tools required:
 
 ## Steps
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## Rollback
 <!-- How to undo these steps if something goes wrong -->

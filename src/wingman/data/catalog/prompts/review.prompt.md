@@ -19,4 +19,3 @@ End with a one-line verdict: is the Definition of Done met, or what is missing.
 
 Finally, record the hand-off in the `.agent/tracking/` ledger (schema and command
 in `.github/copilot-instructions.md`).
-

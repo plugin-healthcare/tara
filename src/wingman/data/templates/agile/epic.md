@@ -8,10 +8,10 @@
 
 ## Scope
 ### In scope
-- 
+-
 
 ### Out of scope
-- 
+-
 
 ## Success Metrics
 | Metric | Baseline | Target |
@@ -26,4 +26,4 @@
 <!-- Other epics, teams, or external systems this depends on -->
 
 ## Open Questions
-- 
+-

@@ -4,9 +4,9 @@
 <!-- One sentence describing what is broken -->
 
 ## Steps to Reproduce
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## Expected Behaviour
 <!-- What should happen -->
