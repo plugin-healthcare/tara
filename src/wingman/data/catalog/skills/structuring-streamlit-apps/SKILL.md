@@ -70,7 +70,10 @@ them.
 
 - Cache expensive calls with `@st.cache_data` / `@st.cache_resource` at the view
   boundary, not inside the pure `backend/` functions.
--- Multipage: files under `pages/` become sidebar entries automatically; prefix
+- Use `@st.fragment` and `st.form` to scope reruns: fragments rerun in isolation for
+  partial updates, and forms batch widget input into a single submit. Both cut
+  full-script reruns and keep the app responsive.
+- Multipage: files under `pages/` become sidebar entries automatically; prefix
   with a number to order them.
 - `.streamlit/config.toml` holds theme and server config; do not hardcode it.
 

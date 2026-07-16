@@ -616,7 +616,7 @@ def _report_standards(stack: str, *, write: bool, dry_run: bool) -> None:
     if missing_tools:
         typer.echo(f"  dev tools      missing: {', '.join(missing_tools)}")
     else:
-        typer.echo("  dev tools      ok (ruff, ty, pytest, pre-commit installed)")
+        typer.echo("  dev tools      ok (ruff, ty, pytest, pre-commit declared)")
 
     if any(cs.status != "ok" for cs in categories):
         typer.echo(

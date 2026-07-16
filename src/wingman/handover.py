@@ -95,7 +95,7 @@ def ensure_gitignored(
     """Add (or confirm) a git-ignore block for ``folder`` in the repo .gitignore.
 
     ``marker`` and ``block`` let other ``.agent/`` artifacts (e.g. the tracking
-    ledger) reuse this same idempotent .gitignore wiring with their own text.
+    log) reuse this same idempotent .gitignore wiring with their own text.
     """
     path = repo_root() / GITIGNORE
     existing = path.read_text() if path.exists() else ""

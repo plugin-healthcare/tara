@@ -1,42 +1,62 @@
-"""Agent hand-off ledger: a queryable Parquet log under ``.agent/tracking/``.
+"""Agent hand-off log: a queryable SQLite table under ``.agent/tracking/``.
 
 The freeform ``.agent/memory/`` folder (see :mod:`wingman.handover`) holds prose
 notes; this module adds a *structured* companion. Each phase of the fixed flow
-(refine, design, implement, review, integrate) ends by appending one small
-Parquet file per hand-off, which DuckDB can query across the whole dataset
-without any of it becoming a wingman dependency (see ADR-0001).
+(refine, design, implement, review, integrate) ends by appending one row to a
+single SQLite database, ``.agent/tracking/handoffs.db`` (see ADR-0001).
 
-Wingman only scaffolds the folder, documents the schema, and wires git-ignoring;
-the GitHub Copilot runtime writes the rows. Its contents are git-ignored by
-default (like ``.agent/memory/``); opt in to *commit and push* the Parquet by
-setting ``gitignore = false`` under ``[tracking]`` in ``.wingman/config.toml``.
+SQLite is used deliberately: its file format is a stable, documented open
+standard, ``sqlite3`` ships with the Python standard library (zero dependency),
+and WAL mode lets concurrent sessions append safely. DuckDB is *not* required to
+write the log; when you want its query ergonomics it reads the same SQLite file
+directly (``sqlite_scan`` / ``ATTACH``).
+
+Wingman only scaffolds the database (folder, empty schema, git-ignoring) and
+documents how to use it; the GitHub Copilot runtime writes the rows. The log is
+git-ignored by default (like ``.agent/memory/``); opt in to *commit and push* it
+by setting ``gitignore = false`` under ``[tracking]`` in ``.wingman/config.toml``.
 """
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 from wingman.core import repo_root
 from wingman.handover import ensure_gitignored, load_config
 
 DEFAULT_DIR = Path(".agent") / "tracking"
-# Sub-directory the runtime writes one Parquet file per hand-off into.
-HANDOFFS = "handoffs"
+# The single SQLite database the runtime appends hand-off rows to.
+HANDOFFS_DB = "handoffs.db"
 
 # Marker identifying our tracking block in .gitignore (kept idempotent on re-run).
-_MARKER = "# Wingman: agent hand-off ledger"
+_MARKER = "# Wingman: agent hand-off log"
 
-# The columns each hand-off Parquet row carries. Documented here, in the README,
-# and in base.md so the runtime writes a consistent schema.
+# The columns each hand-off row carries. Documented here, in the README, and in
+# base.md so the runtime writes a consistent schema.
 SCHEMA: tuple[tuple[str, str], ...] = (
-    ("ts", "TIMESTAMP — when the hand-off happened"),
-    ("session_id", "VARCHAR — id of the agent session"),
-    ("branch", "VARCHAR — git branch the work is on"),
-    ("phase", "VARCHAR — refine | design | implement | review | integrate"),
-    ("summary", "VARCHAR — what was done in this phase"),
-    ("next_step", "VARCHAR — what the next session/developer should pick up"),
-    ("files", "VARCHAR[] — paths touched in this phase"),
+    ("ts", "TEXT — when the hand-off happened (UTC, `datetime('now')`)"),
+    ("session_id", "TEXT — id of the agent session"),
+    ("branch", "TEXT — git branch the work is on"),
+    ("phase", "TEXT — refine | design | implement | review | integrate"),
+    ("summary", "TEXT — what was done in this phase"),
+    ("next_step", "TEXT — what the next session/developer should pick up"),
+    ("files", "TEXT — JSON array of paths touched in this phase"),
 )
+
+# Idempotent DDL wingman applies when scaffolding; the runtime only INSERTs.
+_SCHEMA_SQL = """\
+CREATE TABLE IF NOT EXISTS handoffs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL DEFAULT (datetime('now')),
+  session_id TEXT NOT NULL,
+  branch TEXT,
+  phase TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  next_step TEXT,
+  files TEXT
+);
+"""
 
 
 def tracking_settings() -> tuple[Path, bool]:
@@ -47,42 +67,65 @@ def tracking_settings() -> tuple[Path, bool]:
     return folder, gitignore
 
 
-def _duckdb_python(sql: str, *, show: bool) -> str:
-    """Wrap a SQL statement in the runtime's ephemeral-DuckDB python invocation.
+def _init_db(path: Path) -> None:
+    """Create the log DB with WAL mode and the idempotent hand-off schema."""
+    con = sqlite3.connect(path)
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.executescript(_SCHEMA_SQL)
+        con.commit()
+    finally:
+        con.close()
 
-    DuckDB is run via ``uv run --with duckdb`` so it never becomes a project
-    dependency; the ``duckdb`` PyPI package is a library, not a CLI.
-    """
-    call = f'print(duckdb.sql("{sql}"))' if show else f'duckdb.sql("{sql}")'
-    call = call.replace('"', '\\"')
-    return f'uv run --with duckdb python -c "import duckdb; {call}"'
 
-
-def append_command(folder: Path) -> str:
+def append_command(db: Path) -> str:
     """The command the runtime runs to append a single hand-off row.
 
-    Each call writes one uniquely-named Parquet file (substitute a real
-    ``<ts>-<session>-<phase>`` slug), so the ledger is append-only with no
-    read-modify-rewrite and no write races.
+    Uses only the standard-library ``sqlite3`` module — no wingman dependency —
+    and a parameterised INSERT so values never need escaping.
     """
-    rel = folder.as_posix()
-    sql = (
-        "COPY (SELECT now() AS ts, '<session>' AS session_id, "
-        "'<branch>' AS branch, '<phase>' AS phase, '<summary>' AS summary, "
-        "'<next_step>' AS next_step, ['path/one.py'] AS files) "
-        f"TO '{rel}/{HANDOFFS}/<ts>-<session>-<phase>.parquet' (FORMAT parquet)"
+    rel = db.as_posix()
+    return (
+        "uv run python - <<'PY'\n"
+        "import json, sqlite3\n"
+        f'con = sqlite3.connect("{rel}")\n'
+        "con.execute(\n"
+        '    "INSERT INTO handoffs '
+        '(session_id, branch, phase, summary, next_step, files) "\n'
+        '    "VALUES (?, ?, ?, ?, ?, ?)",\n'
+        '    ("<session>", "<branch>", "<phase>", "<summary>", "<next_step>", '
+        'json.dumps(["path/one.py"])),\n'
+        ")\n"
+        "con.commit()\n"
+        "PY"
     )
-    return _duckdb_python(sql, show=False)
 
 
-def query_command(folder: Path) -> str:
-    """The command to read the whole ledger, newest first."""
-    rel = folder.as_posix()
+def query_command(db: Path) -> str:
+    """The command to read the whole log, newest first (standard library)."""
+    rel = db.as_posix()
+    return (
+        "uv run python - <<'PY'\n"
+        "import sqlite3\n"
+        f'con = sqlite3.connect("{rel}")\n'
+        "for row in con.execute(\n"
+        '    "SELECT ts, phase, summary, next_step FROM handoffs ORDER BY ts DESC"\n'
+        "):\n"
+        "    print(row)\n"
+        "PY"
+    )
+
+
+def duckdb_query_command(db: Path) -> str:
+    """Optional: the same query via DuckDB, which reads the SQLite file directly."""
+    rel = db.as_posix()
     sql = (
         "SELECT ts, phase, summary, next_step "
-        f"FROM read_parquet('{rel}/{HANDOFFS}/**/*.parquet') ORDER BY ts DESC"
+        f"FROM sqlite_scan('{rel}', 'handoffs') ORDER BY ts DESC"
     )
-    return _duckdb_python(sql, show=True)
+    sql = sql.replace('"', '\\"')
+    inner = f'import duckdb; print(duckdb.sql(\\"{sql}\\"))'
+    return f'uv run --with duckdb python -c "{inner}"'
 
 
 def _schema_table() -> str:
@@ -91,31 +134,35 @@ def _schema_table() -> str:
 
 def _readme(folder: Path, gitignore: bool) -> str:
     rel = folder.as_posix()
+    db = folder / HANDOFFS_DB
     status = (
-        "Its Parquet contents are **git-ignored** by default, so the ledger stays "
-        "local. Opt in to *commit and push* it by setting `[tracking] gitignore = "
-        "false` in `.wingman/config.toml` and removing the matching block from "
-        "`.gitignore`."
+        f"The `{HANDOFFS_DB}` database is **git-ignored** by default, so the log "
+        "stays local. Opt in to *commit and push* it by setting `[tracking] "
+        "gitignore = false` in `.wingman/config.toml` and removing the matching "
+        "block from `.gitignore`."
         if gitignore
-        else "Its Parquet contents are **committed** (`[tracking] gitignore = false`), "
-        "so the ledger is shared through version control."
+        else f"The `{HANDOFFS_DB}` database is **committed** (`[tracking] gitignore "
+        "= false`), so the log is shared through version control."
     )
     return (
-        f"# Agent hand-off ledger\n\n"
-        f"`{rel}/{HANDOFFS}/` is a structured, queryable log of the fixed flow's "
-        f"phase hand-offs. Each hand-off is written as one small Parquet file; "
-        f"DuckDB queries the whole dataset. See `docs/decisions/0001-*.md`.\n\n"
+        f"# Agent hand-off log\n\n"
+        f"`{rel}/{HANDOFFS_DB}` is a structured, queryable record of the fixed "
+        f"flow's phase hand-offs: one SQLite table, one row per hand-off. Wingman "
+        f"creates the empty database; the runtime appends rows. See "
+        f"`docs/decisions/0001-*.md`.\n\n"
         f"{status}\n\n"
-        f"## Schema\n\n"
+        f"## Schema (`handoffs` table)\n\n"
         f"Each row carries:\n\n"
         f"{_schema_table()}\n\n"
         f"## Append a hand-off (runtime)\n\n"
-        f"```sh\n{append_command(folder)}\n```\n\n"
-        f"## Query the ledger\n\n"
-        f"```sh\n{query_command(folder)}\n```\n\n"
-        f"Nothing here is a wingman dependency: DuckDB runs ephemerally via "
-        f"`uv run --with duckdb`, and the Parquet files are the portable source "
-        f"of truth.\n"
+        f"```sh\n{append_command(db)}\n```\n\n"
+        f"## Query the log\n\n"
+        f"```sh\n{query_command(db)}\n```\n\n"
+        f"Prefer DuckDB's SQL ergonomics? It reads the SQLite file directly — no "
+        f"export, and still no project dependency:\n\n"
+        f"```sh\n{duckdb_query_command(db)}\n```\n\n"
+        f"Nothing here is a wingman dependency: `sqlite3` is in the Python standard "
+        f"library, and the SQLite file is the portable source of truth.\n"
     )
 
 
@@ -123,28 +170,31 @@ def _gitignore_block(folder: Path) -> str:
     rel = folder.as_posix()
     return (
         f"{_MARKER}: local by default. The folder and its README stay tracked;\n"
-        f"# hand-off Parquet files are ignored. Opt out (commit and push the\n"
-        f"# ledger) via [tracking] gitignore=false in .wingman/config.toml, then\n"
-        f"# remove this block.\n"
-        f"{rel}/{HANDOFFS}/\n"
+        f"# the SQLite database (and its WAL side-files) are ignored. Opt out\n"
+        f"# (commit and push the log) via [tracking] gitignore=false in\n"
+        f"# .wingman/config.toml, then remove this block.\n"
+        f"{rel}/{HANDOFFS_DB}\n"
+        f"{rel}/{HANDOFFS_DB}-wal\n"
+        f"{rel}/{HANDOFFS_DB}-shm\n"
         f"!{rel}/README.md\n"
     )
 
 
 def write_tracking(dry_run: bool) -> str:
-    """Create the hand-off ledger folder and wire up git-ignoring."""
+    """Create the hand-off log database and wire up git-ignoring."""
     folder, gitignore = tracking_settings()
     rel = folder.as_posix()
     lines: list[str] = []
     if dry_run:
-        lines.append(f"  [dry-run] {rel}/{HANDOFFS}/ (+ README.md)")
+        lines.append(f"  [dry-run] {rel}/{HANDOFFS_DB} (+ README.md)")
     else:
-        target = repo_root() / folder / HANDOFFS
+        target = repo_root() / folder
         target.mkdir(parents=True, exist_ok=True)
-        readme = repo_root() / folder / "README.md"
+        _init_db(target / HANDOFFS_DB)
+        readme = target / "README.md"
         if not readme.exists():
             readme.write_text(_readme(folder, gitignore))
-        lines.append(f"  wrote {rel}/README.md")
+        lines.append(f"  wrote {rel}/{HANDOFFS_DB} and {rel}/README.md")
     if gitignore:
         lines.append(
             ensure_gitignored(

@@ -17,5 +17,5 @@ Review phase of the flow. Give structured feedback against the points in
 Format as a prioritised list: `[blocker]`, `[suggestion]`, `[nit]`.
 End with a one-line verdict: is the Definition of Done met, or what is missing.
 
-Finally, record the hand-off in the `.agent/tracking/` ledger (schema and command
+Finally, record the hand-off in the `.agent/tracking/` log (schema and command
 in `.github/copilot-instructions.md`).

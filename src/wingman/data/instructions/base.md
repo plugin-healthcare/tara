@@ -36,7 +36,7 @@ review, release). Don't skip steps; if one genuinely doesn't apply, say why.
    update the changelog if the change is user-facing.
 7. **Review & hand off** — verify the Definition of Done, then stage changes and draft
    a commit message for the developer. Never commit or push. Record the hand-off in
-   the ledger (see below) so the next session can pick up.
+   the log (see below) so the next session can pick up.
 
 When blocked, say so; don't silently guess.
 
@@ -50,29 +50,46 @@ When blocked, say so; don't silently guess.
   decisions. Don't duplicate them into commits or the repo's real docs.
 - Never put secrets or credentials here; git-ignored is not private.
 
-### Hand-off ledger (queryable)
+### Hand-off log (queryable)
 
-`.agent/tracking/` holds a structured companion to the prose notes: an append-only
-Parquet log of each flow phase's hand-off, queried with DuckDB (see
-`docs/decisions/0001-*.md`). Wingman only scaffolds it; you write the rows.
+`.agent/tracking/handoffs.db` is a structured companion to the prose notes: an
+append-only SQLite log of each flow phase's hand-off (see `docs/decisions/0001-*.md`).
+Wingman creates the empty database; you write the rows. `sqlite3` is in the Python
+standard library, so this needs no dependency.
 
 - **When**: at the end of each phase (`/refine`, `/design`, `/implement`, `/review`,
   `/integrate`) and whenever you hand work off, append one row.
-- **How**: write a single, uniquely-named Parquet file (DuckDB runs ephemerally via
-  `uv run --with duckdb`, so it never becomes a project dependency — the `duckdb`
-  package is a library, not a CLI):
+- **How**: insert one row with the standard-library `sqlite3` module (parameterised,
+  so values never need escaping):
 
   ```sh
-  uv run --with duckdb python -c "import duckdb; duckdb.sql(\"COPY (SELECT now() AS ts, '<session>' AS session_id, '<branch>' AS branch, '<phase>' AS phase, '<summary>' AS summary, '<next_step>' AS next_step, ['path/one.py'] AS files) TO '.agent/tracking/handoffs/<ts>-<session>-<phase>.parquet' (FORMAT parquet)\")"
+  uv run python - <<'PY'
+  import json, sqlite3
+  con = sqlite3.connect(".agent/tracking/handoffs.db")
+  con.execute(
+      "INSERT INTO handoffs (session_id, branch, phase, summary, next_step, files) "
+      "VALUES (?, ?, ?, ?, ?, ?)",
+      ("<session>", "<branch>", "<phase>", "<summary>", "<next_step>", json.dumps(["path/one.py"])),
+  )
+  con.commit()
+  PY
   ```
 
-- **Query** the whole ledger, newest first:
+- **Query** the whole log, newest first:
 
   ```sh
-  uv run --with duckdb python -c "import duckdb; print(duckdb.sql(\"SELECT ts, phase, summary, next_step FROM read_parquet('.agent/tracking/handoffs/**/*.parquet') ORDER BY ts DESC\"))"
+  uv run python - <<'PY'
+  import sqlite3
+  con = sqlite3.connect(".agent/tracking/handoffs.db")
+  for row in con.execute("SELECT ts, phase, summary, next_step FROM handoffs ORDER BY ts DESC"):
+      print(row)
+  PY
   ```
 
-- The ledger is git-ignored by default; opt in to commit and push it via
+  Prefer DuckDB's SQL ergonomics? It reads the SQLite file directly, no export:
+  `uv run --with duckdb python -c "import duckdb; print(duckdb.sql(\"SELECT * FROM sqlite_scan('.agent/tracking/handoffs.db', 'handoffs') ORDER BY ts DESC\"))"`.
+
+- The log is git-ignored by default; opt in to commit and push it via
   `[tracking] gitignore = false` in `.wingman/config.toml`. Never write secrets here.
 
 ## Safety: destructive operations

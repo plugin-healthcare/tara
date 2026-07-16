@@ -19,5 +19,5 @@ Refine phase of the flow. Turn a goal or feature into agile work items following
 
 Keep items short and functional. Do not start implementing here.
 
-Finally, record the hand-off in the `.agent/tracking/` ledger (schema and command
+Finally, record the hand-off in the `.agent/tracking/` log (schema and command
 in `.github/copilot-instructions.md`).

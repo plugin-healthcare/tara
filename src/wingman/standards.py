@@ -146,8 +146,7 @@ def add_dev_tools(tools: list[str], dry_run: bool = False) -> tuple[bool, str]:
     cmd = ["uv", "add", "--dev", *tools]
     if dry_run:
         return True, "[dry-run] " + " ".join(cmd)
-    proc = subprocess.run(cmd, cwd=repo_root())
-    return proc.returncode == 0, " ".join(cmd)
+    return _run_uv(cmd)
 
 
 def install_precommit_hook(dry_run: bool = False) -> tuple[bool, str]:
@@ -155,5 +154,14 @@ def install_precommit_hook(dry_run: bool = False) -> tuple[bool, str]:
     cmd = ["uv", "run", "pre-commit", "install"]
     if dry_run:
         return True, "[dry-run] " + " ".join(cmd)
-    proc = subprocess.run(cmd, cwd=repo_root())
-    return proc.returncode == 0, " ".join(cmd)
+    return _run_uv(cmd)
+
+
+def _run_uv(cmd: list[str]) -> tuple[bool, str]:
+    """Run a ``uv`` command, returning (ok, message) without raising if uv is absent."""
+    joined = " ".join(cmd)
+    try:
+        proc = subprocess.run(cmd, cwd=repo_root())
+    except OSError:
+        return False, f"{joined} (uv not found — install uv or activate a virtualenv)"
+    return proc.returncode == 0, joined

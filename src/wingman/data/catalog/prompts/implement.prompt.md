@@ -21,5 +21,5 @@ Definition of Done in `.github/copilot-instructions.md`.
 
 Never commit or push. Stage the change and hand off to the developer.
 
-Finally, record the hand-off in the `.agent/tracking/` ledger (schema and command
+Finally, record the hand-off in the `.agent/tracking/` log (schema and command
 in `.github/copilot-instructions.md`).
