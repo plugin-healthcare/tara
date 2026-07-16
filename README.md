@@ -1,41 +1,41 @@
-# Wingman
+# Tara
 
-A GitHub Copilot guardrail toolkit. Wingman is a small Python CLI you install in a
+A GitHub Copilot guardrail toolkit. Tara is a small Python CLI you install in a
 repo to set up Copilot the way you would: it writes the instruction and MCP files
 Copilot reads, fetches and updates reusable skills, scaffolds prompts and agents,
 and runs a check gate that "programs and checks like me".
 
-Wingman is Python + uv focused and **GitHub Copilot only**.
+Tara is Python + uv focused and **GitHub Copilot only**.
 
-## What Wingman is (and is not)
+## What Tara is (and is not)
 
 There is a clean split between the two halves of the workflow:
 
-- **Wingman (this CLI) does setup and management.** It is a normal command-line
+- **Tara (this CLI) does setup and management.** It is a normal command-line
   tool. It writes files into your repo, fetches skills from git, audits those
   files for best practices, and runs your lint/format/test gate. It does not talk
   to a model at runtime (except `audit --deep`, which shells out to the Copilot
   CLI for an optional content review).
-- **GitHub Copilot does the runtime work.** Copilot reads the files Wingman writes
+- **GitHub Copilot does the runtime work.** Copilot reads the files Tara writes
   (`.github/copilot-instructions.md`, `.github/skills/`, `.github/agents/`,
-  `.github/prompts/`, `.mcp.json`) while you code. Wingman never replaces
+  `.github/prompts/`, `.mcp.json`) while you code. Tara never replaces
   Copilot; it just gets the guardrails in place and keeps them healthy.
 
-In short: **Wingman installs and maintains the guardrails, Copilot uses them.**
+In short: **Tara installs and maintains the guardrails, Copilot uses them.**
 
 ## Install
 
 Run it without installing:
 
 ```bash
-uvx wingman init
+uvx --from tara-dev tara init
 ```
 
 Or add it as a dev dependency of your project:
 
 ```bash
-uv add --dev wingman
-uv run wingman init
+uv add --dev tara-dev
+uv run tara init
 ```
 
 Every command operates on the current working directory (the repo you are in).
@@ -43,10 +43,10 @@ Every command operates on the current working directory (the repo you are in).
 ## Quick start
 
 ```bash
-wingman init            # write copilot-instructions.md + .mcp.json, then pick artifacts
-wingman list            # show the Copilot triggers active in this repo
-wingman check           # run the lint/format/test gate
-wingman audit           # lint your skills/agents/instructions for best practices
+tara init            # write copilot-instructions.md + .mcp.json, then pick artifacts
+tara list            # show the Copilot triggers active in this repo
+tara check           # run the lint/format/test gate
+tara audit           # lint your skills/agents/instructions for best practices
 ```
 
 Once the files are in place, see
@@ -60,17 +60,17 @@ Full reference (every command, flag, and argument) is auto-generated in
 [`docs/cli.md`](docs/cli.md); refresh it with
 `uv run python scripts/gen_cli_docs.py`. The essentials:
 
-- **Setup:** `wingman init` (write instructions + `.mcp.json`, pick artifacts),
-  `wingman add` (re-open the picker), `wingman sync` (pull skills/docs from
+- **Setup:** `tara init` (write instructions + `.mcp.json`, pick artifacts),
+  `tara add` (re-open the picker), `tara sync` (pull skills/docs from
   installed packages).
-- **Inspect:** `wingman list` (what Copilot will pick up).
-- **Skills & agents:** `wingman skill add|list|update|remove`,
-  `wingman agent list|add`.
-- **Quality gate:** `wingman check` (ruff, `ty`, pytest, `uv audit`),
-  `wingman standards` (compare tooling to the opinionated baseline),
-  `wingman audit` (lint guardrail artifacts).
-- **Scaffold:** `wingman new [kind] [name]` (prompt, agent, or a document such as
-  `adr`, `runbook`, `changelog`, `ci`). Run `wingman new` to list kinds.
+- **Inspect:** `tara list` (what Copilot will pick up).
+- **Skills & agents:** `tara skill add|list|update|remove`,
+  `tara agent list|add`.
+- **Quality gate:** `tara check` (ruff, `ty`, pytest, `uv audit`),
+  `tara standards` (compare tooling to the opinionated baseline),
+  `tara audit` (lint guardrail artifacts).
+- **Scaffold:** `tara new [kind] [name]` (prompt, agent, or a document such as
+  `adr`, `runbook`, `changelog`, `ci`). Run `tara new` to list kinds.
 
 ## What gets written into your repo
 
@@ -82,7 +82,7 @@ Full reference (every command, flag, and argument) is auto-generated in
   agents/<name>.agent.md           # custom agents
   prompts/<name>.prompt.md         # slash-command prompts
 .mcp.json                          # MCP servers (Copilot CLI "mcpServers" schema)
-.wingman/
+.tara/
   skills.toml                      # skill manifest (source of truth)
   skills.lock                      # pinned commits
   checks.toml                      # optional: override the check gate
@@ -96,9 +96,9 @@ Copilot's `.github/` setup is the single source of truth. opencode files are a
 generated **port** of it, so there's only ever one copy to maintain:
 
 ```bash
-wingman init --tool opencode   # set up Copilot, then port it to opencode
-wingman init --tool all        # same as --tool opencode
-wingman opencode sync          # re-port after changing .github/ (run anytime)
+tara init --tool opencode   # set up Copilot, then port it to opencode
+tara init --tool all        # same as --tool opencode
+tara opencode sync          # re-port after changing .github/ (run anytime)
 ```
 
 The port writes (all derived, never hand-edited):
@@ -110,17 +110,17 @@ opencode.json          # references .github/copilot-instructions.md + MCP server
 .opencode/skills/<name>/ # mirrored from .github/skills/<name>/
 ```
 
-Edit the Copilot side (or wingman's bundled standard) and re-run
-`wingman opencode sync`. The default `wingman init` (`--tool copilot`) skips the
+Edit the Copilot side (or Tara's bundled standard) and re-run
+`tara opencode sync`. The default `tara init` (`--tool copilot`) skips the
 port entirely.
 
 ## MCP setup
 
-Wingman writes the repo-root `.mcp.json` (the `mcpServers` schema the **GitHub
-Copilot CLI** reads). Servers are **opt-in**: `wingman init` / `wingman add` show a
+Tara writes the repo-root `.mcp.json` (the `mcpServers` schema the **GitHub
+Copilot CLI** reads). Servers are **opt-in**: `tara init` / `tara add` show a
 picker. Bundled servers are `github` and `git` (defaults), plus `polars` and
-`likec4`; `wingman sync --docs` can wire in a `docs` server from a package's
-`llms.txt`. Add repo-local servers in `.wingman/mcp.local.json`.
+`likec4`; `tara sync --docs` can wire in a `docs` server from a package's
+`llms.txt`. Add repo-local servers in `.tara/mcp.local.json`.
 
 Remote servers send tool-call arguments to a third party, so enabling one prints
 a warning. VS Code reads `.vscode/mcp.json` (not the root file), and the Copilot
@@ -130,9 +130,9 @@ privacy breakdown.
 
 ## Skills
 
-Skills are grouped into **themes** in the `wingman init` / `wingman add` picker:
+Skills are grouped into **themes** in the `tara init` / `tara add` picker:
 pick a theme and all of its skills install at once. List them with
-`wingman skill list --all`, or install one directly with `wingman skill add <theme>`.
+`tara skill list --all`, or install one directly with `tara skill add <theme>`.
 The index currently ships:
 
 - **duckdb** (from [`duckdb/duckdb-skills`](https://github.com/duckdb/duckdb-skills)):
@@ -152,26 +152,26 @@ The index currently ships:
 
 
 ```bash
-wingman skill add query           # one skill, from the index
-wingman skill add duckdb           # a whole set (all DuckDB skills at once)
-wingman skill add streamlit        # the official Streamlit skill
-wingman skill add https://github.com/org/repo --path skills/foo --ref main
+tara skill add query           # one skill, from the index
+tara skill add duckdb           # a whole set (all DuckDB skills at once)
+tara skill add streamlit        # the official Streamlit skill
+tara skill add https://github.com/org/repo --path skills/foo --ref main
 ```
 
 **Sets** bundle every skill under a directory so you can grab them in one go.
-`wingman skill add duckdb` clones [`duckdb/duckdb-skills`](https://github.com/duckdb/duckdb-skills)
+`tara skill add duckdb` clones [`duckdb/duckdb-skills`](https://github.com/duckdb/duckdb-skills)
 once and installs all its skills (minus the Claude-Code-only `read-memories`),
 recording each individually so `skill list`, `update`, and `remove` still work
-per-skill. See sets at the bottom of `wingman skill list --all`.
+per-skill. See sets at the bottom of `tara skill list --all`.
 
 Not every popular library has an official skill. FastAPI, Pydantic, and Polars
 ship no official `SKILL.md`; Polars is covered through its MCP server above, and
 Pydantic through the `docs` MCP server (its `llms.txt`). Add your own to
-`.wingman/skills.toml` (or the index) any time.
+`.tara/skills.toml` (or the index) any time.
 
 ## The check gate
 
-`wingman check` runs the commands in `.wingman/checks.toml`, or the bundled
+`tara check` runs the commands in `.tara/checks.toml`, or the bundled
 defaults for your stack. The Python default is:
 
 ```toml
@@ -204,7 +204,7 @@ non-zero if any check fails, so it works as a pre-commit or CI gate.
 
 ## Auditing guardrails
 
-`wingman audit` is a deterministic linter for the files Copilot consumes. It
+`tara audit` is a deterministic linter for the files Copilot consumes. It
 checks the mechanical things that make a skill or instruction effective: a
 kebab-case name that matches its folder, a description that says *when* to use it,
 complete frontmatter, and a body that is neither empty nor bloated.
@@ -222,9 +222,23 @@ uv run ruff check
 uv run ruff format
 ```
 
+## Release
+
+Publishing runs when a GitHub release is published. The release tag must match
+the version in `pyproject.toml`, with or without a `v` prefix.
+
+The workflow uses PyPI Trusted Publishing, so the repository stores no PyPI
+token. Before the first release, add a pending publisher in your PyPI account:
+
+- PyPI project: `tara-dev`
+- GitHub owner: `plugin-healthcare`
+- Repository: `tara`
+- Workflow: `publish.yml`
+- Environment: `pypi`
+
 ## Credits
 
 Projects we borrowed ideas from or built on top of:
 
-- **[library-skills](https://github.com/tiangolo/library-skills)** by tiangolo: the convention of shipping `SKILL.md` files inside Python packages under `.agents/skills/`. `wingman sync` scans installed packages using that standard and brings discovered skills into `.github/skills/` for Copilot.
-- **[ponytail](https://github.com/DietrichGebert/ponytail)** by DietrichGebert: a "write only what the task needs" ruleset for AI agents. Informed the thinking behind Wingman's default instructions and check gate philosophy.
+- **[library-skills](https://github.com/tiangolo/library-skills)** by tiangolo: the convention of shipping `SKILL.md` files inside Python packages under `.agents/skills/`. `tara sync` scans installed packages using that standard and brings discovered skills into `.github/skills/` for Copilot.
+- **[ponytail](https://github.com/DietrichGebert/ponytail)** by DietrichGebert: a "write only what the task needs" ruleset for AI agents. Informed the thinking behind Tara's default instructions and check gate philosophy.

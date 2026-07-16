@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from wingman import standards
+from tara import standards
 
 
 def test_no_pyproject_reports_no_pyproject(repo):

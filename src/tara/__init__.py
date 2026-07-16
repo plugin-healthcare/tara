@@ -1,0 +1,1 @@
+"""tara — agent superpowers CLI."""

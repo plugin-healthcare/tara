@@ -34,7 +34,7 @@ def skill_source(tmp_path) -> tuple[str, str]:
     (skill / "SKILL.md").write_text(
         "---\n"
         "name: demo\n"
-        'description: "Demo skill. Use when testing wingman skill fetching."\n'
+        'description: "Demo skill. Use when testing tara skill fetching."\n'
         "---\n\n"
         "# Demo\n\nEnough body content for the skill to be considered usable.\n"
     )

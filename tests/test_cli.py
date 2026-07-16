@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typer.testing import CliRunner
 
-from wingman.cli import app
+from tara.cli import app
 
 runner = CliRunner()
 
