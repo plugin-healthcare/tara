@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from wingman import check
+from tara import check
 
 
 def test_load_bundled_python_checks(repo):
@@ -14,7 +14,7 @@ def test_load_bundled_python_checks(repo):
 
 
 def test_local_checks_override_bundled(repo):
-    local = repo / ".wingman"
+    local = repo / ".tara"
     local.mkdir()
     (local / "checks.toml").write_text('[[check]]\nname = "custom"\ncmd = "echo hi"\n')
     checks = check.load_checks("python")
@@ -28,7 +28,7 @@ def test_unknown_stack_raises(repo):
 
 
 def test_run_checks_stops_on_failure(repo):
-    local = repo / ".wingman"
+    local = repo / ".tara"
     local.mkdir()
     (local / "checks.toml").write_text(
         '[[check]]\nname = "fail"\ncmd = "false"\n'
@@ -40,7 +40,7 @@ def test_run_checks_stops_on_failure(repo):
 
 
 def test_run_checks_all_pass(repo):
-    local = repo / ".wingman"
+    local = repo / ".tara"
     local.mkdir()
     (local / "checks.toml").write_text('[[check]]\nname = "ok"\ncmd = "true"\n')
     results = check.run_checks("python")

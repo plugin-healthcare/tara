@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from wingman import skills
+from tara import skills
 
 
 def test_manifest_roundtrip(repo):

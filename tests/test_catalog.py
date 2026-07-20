@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from wingman import catalog
+from tara import catalog
 
 
 def test_catalog_lists_bundled_agents(repo):
@@ -50,7 +50,7 @@ def test_catalog_lists_mcp_servers(repo):
 def test_install_mcp_merges_into_vscode_config(repo):
     import json
 
-    from wingman import core
+    from tara import core
 
     core.write_mcp("python", dry_run=False)  # seed an empty servers map
     item = next(it for it in catalog.catalog(["mcp"])["mcp"] if it.name == "likec4")
@@ -65,7 +65,7 @@ def test_install_mcp_merges_into_vscode_config(repo):
 
 
 def test_install_third_party_mcp_warns(repo):
-    from wingman import core
+    from tara import core
 
     core.write_mcp("python", dry_run=False)
     item = next(it for it in catalog.catalog(["mcp"])["mcp"] if it.name == "polars")
@@ -76,7 +76,7 @@ def test_install_third_party_mcp_warns(repo):
 
 
 def test_install_default_mcp_does_not_warn(repo):
-    from wingman import core
+    from tara import core
 
     core.write_mcp("python", dry_run=False)
     # github is remote but Copilot-hosted and a curated default: no warning.
@@ -112,7 +112,7 @@ def test_catalog_skills_includes_bundled(repo, tmp_path, monkeypatch):
 
 
 def test_install_bundled_skill_copies_tree(repo, tmp_path, monkeypatch):
-    from wingman import skills
+    from tara import skills
 
     data_dir = tmp_path / "data"
     _make_bundled_skill(data_dir, "writing-adrs")
@@ -130,7 +130,7 @@ def test_install_bundled_skill_copies_tree(repo, tmp_path, monkeypatch):
 
 
 def test_install_bundled_skill_overwrites_existing(repo, tmp_path, monkeypatch):
-    from wingman import skills
+    from tara import skills
 
     data_dir = tmp_path / "data"
     _make_bundled_skill(data_dir, "writing-adrs")

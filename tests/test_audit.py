@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from wingman import audit
+from tara import audit
 
 
 def test_parse_frontmatter_scalars():
@@ -75,7 +75,7 @@ def test_audit_good_skill_is_clean(repo):
         "demo",
         "---\n"
         "name: demo\n"
-        'description: "A demo skill. Use when testing wingman auditing behaviour."\n'
+        'description: "A demo skill. Use when testing tara auditing behaviour."\n'
         "---\n\n"
         "# Demo\n\n" + ("usable instruction content. " * 10) + "\n",
     )
@@ -205,7 +205,7 @@ def test_audit_all_flags_unpinned_local_mcp_override(repo):
     _write_mcp(
         repo,
         {"git": {"command": "uvx", "args": ["mcp-server-git"]}},
-        name=".wingman/mcp.local.json",
+        name=".tara/mcp.local.json",
     )
     findings = audit.audit_all()
     assert any("unpinned" in f.message for f in findings)

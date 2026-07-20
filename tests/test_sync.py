@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from wingman import sync as sync_mod
+from tara import sync as sync_mod
 
 SKILL_MD = (
     "---\n"

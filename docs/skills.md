@@ -1,28 +1,28 @@
-# Skills in wingman
+# Skills in tara
 
 Skills are reference files Copilot loads on demand, stored as
 `.github/skills/<name>/SKILL.md` (plus optional `references/` and `assets/`).
-wingman fetches them from git, pins them in `.wingman/skills.lock`, and records
-them in `.wingman/skills.toml`.
+Tara fetches them from git, pins them in `.tara/skills.lock`, and records
+them in `.tara/skills.toml`.
 
 ## Installing
 
-Skills are grouped into themes in the `wingman init` / `wingman add` picker: pick a
+Skills are grouped into themes in the `tara init` / `tara add` picker: pick a
 theme and all of its skills install at once. You can also install directly:
 
 ```bash
-wingman skill add query      # one skill from the index
-wingman skill add duckdb      # a theme (all DuckDB skills at once)
-wingman skill add streamlit   # the official Streamlit skill
-wingman skill add https://github.com/org/repo --path skills/foo --ref main
+tara skill add query      # one skill from the index
+tara skill add duckdb      # a theme (all DuckDB skills at once)
+tara skill add streamlit   # the official Streamlit skill
+tara skill add https://github.com/org/repo --path skills/foo --ref main
 ```
 
 Manage installed skills:
 
 ```bash
-wingman skill list            # installed skills (--all also shows themes)
-wingman skill update [name]   # re-fetch one or all to the latest commit
-wingman skill remove <name>   # delete from disk and the manifest
+tara skill list            # installed skills (--all also shows themes)
+tara skill update [name]   # re-fetch one or all to the latest commit
+tara skill remove <name>   # delete from disk and the manifest
 ```
 
 ## Themes in the index
@@ -45,21 +45,21 @@ wingman skill remove <name>   # delete from disk and the manifest
 ## Sets
 
 A theme is a set: it bundles every skill under a directory so you install them in
-one go. `wingman skill add duckdb` clones the repo once and installs all its skills
+one go. `tara skill add duckdb` clones the repo once and installs all its skills
 (minus the Claude-Code-only `read-memories`), recording each one individually so
 `skill list`, `update`, and `remove` still work per-skill. See the sets at the
-bottom of `wingman skill list --all`.
+bottom of `tara skill list --all`.
 
 ## Libraries without a skill
 
 Not every popular library has an official skill. FastAPI, Pydantic, and Polars ship
 no official `SKILL.md`. Polars is covered through its MCP server, and Pydantic
-through the `docs` MCP server (its `llms.txt`). Add your own to `.wingman/skills.toml`
+through the `docs` MCP server (its `llms.txt`). Add your own to `.tara/skills.toml`
 (or the index) any time.
 
 ## Discovering skills from installed packages
 
-`wingman sync` scans installed packages for `SKILL.md` files bundled under the
+`tara sync` scans installed packages for `SKILL.md` files bundled under the
 library-skills convention and copies them into `.github/skills/`. For packages with
 a known theme in the index it fetches those, and for the rest (with `--docs`, on by
 default) it probes PyPI for an `llms.txt` and wires it into the `docs` MCP server.

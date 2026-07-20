@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from wingman import core, opencode
+from tara import core, opencode
 
 # ── MCP schema translation ────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from wingman import core
+from tara import core
 
 
 def test_assemble_instructions_merges_base_and_stack(repo):
@@ -14,7 +14,7 @@ def test_assemble_instructions_merges_base_and_stack(repo):
 
 
 def test_assemble_instructions_appends_local_override(repo):
-    local = repo / ".wingman"
+    local = repo / ".tara"
     local.mkdir()
     (local / "instructions.local.md").write_text("# Local Rule\nbe nice\n")
     text = core.assemble_instructions(None)
@@ -40,7 +40,7 @@ def test_write_dry_run_writes_nothing(repo):
 
 
 def test_local_mcp_override_merges(repo):
-    local = repo / ".wingman"
+    local = repo / ".tara"
     local.mkdir()
     (local / "mcp.local.json").write_text(
         json.dumps({"mcpServers": {"extra": {"command": "echo"}}})

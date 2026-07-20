@@ -1,18 +1,18 @@
-# MCP servers in wingman
+# MCP servers in tara
 
 MCP lets Copilot call external tools (git, GitHub, docs lookups, and so on).
-wingman can wire these servers into a repo. This doc covers where the config
-goes, the servers wingman offers, and what each one does with your code.
+tara can wire these servers into a repo. This doc covers where the config
+goes, the servers tara offers, and what each one does with your code.
 
 ## Where the config goes
 
-wingman writes the repo-root `.mcp.json` using the `mcpServers` key. That is the
-file the GitHub Copilot CLI reads. Servers are opt-in: `wingman init` and
-`wingman add` show a picker, with a couple pre-checked as defaults.
+Tara writes the repo-root `.mcp.json` using the `mcpServers` key. That is the
+file the GitHub Copilot CLI reads. Servers are opt-in: `tara init` and
+`tara add` show a picker, with a couple pre-checked as defaults.
 
 There is no single MCP file shared by every Copilot surface:
 
-| Surface | Reads from | Top-level key | wingman writes it |
+| Surface | Reads from | Top-level key | Tara writes it |
 | --- | --- | --- | --- |
 | Copilot CLI (terminal) | repo-root `.mcp.json` | `mcpServers` | yes |
 | VS Code editor | `.vscode/mcp.json` | `servers` | no |
@@ -32,15 +32,15 @@ The picker tags each server:
 - `[remote]` (http): an http endpoint hosted by a vendor. The request goes to a
   third party. Examples: `github`, `polars`.
 
-wingman avoids the VS Code-only `${workspaceFolder}` variable. Stdio servers
+Tara avoids the VS Code-only `${workspaceFolder}` variable. Stdio servers
 already launch in your repo, so `mcp-server-git` runs with no `--repository` and
 `@likec4/mcp` with no `LIKEC4_WORKSPACE`. This works in the CLI, the coding agent,
 and VS Code.
 
 Stdio servers launched via a package runner (`uvx`, `npx`) are version-pinned in
 the catalog (e.g. `mcp-server-git@2026.6.16`, `@likec4/mcp@1.58.0`) so a launch
-can't silently pull new code. `wingman audit` flags any unpinned runner entry in
-`.mcp.json` or `.wingman/mcp.local.json`.
+can't silently pull new code. `tara audit` flags any unpinned runner entry in
+`.mcp.json` or `.tara/mcp.local.json`.
 
 ## Privacy
 
@@ -72,7 +72,7 @@ check your Copilot plan's data policy.
 | `git` | stdio | yes | stays local | Git history, blame, diff on the current repo |
 | `polars` | http | no | Polars/Kapa.ai | Polars API and docs knowledge |
 | `likec4` | stdio | no | stays local | Query your LikeC4 architecture model |
-| `docs` (mcpdoc) | stdio | added by `wingman sync --docs` | fetches a public `llms.txt` | Library docs from an `llms.txt` |
+| `docs` (mcpdoc) | stdio | added by `tara sync --docs` | fetches a public `llms.txt` | Library docs from an `llms.txt` |
 
-Servers are defined in `src/wingman/data/mcp/catalog.toml`. Add repo-local servers
-in `.wingman/mcp.local.json` and wingman merges them in.
+Servers are defined in `src/tara/data/mcp/catalog.toml`. Add repo-local servers
+in `.tara/mcp.local.json` and tara merges them in.
