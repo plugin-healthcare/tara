@@ -1,3 +1,5 @@
+![](./images/tara-duotone.png)
+
 # Tara
 
 A GitHub Copilot guardrail toolkit. Tara is a small Python CLI you install in a
@@ -22,6 +24,8 @@ There is a clean split between the two halves of the workflow:
   Copilot; it just gets the guardrails in place and keeps them healthy.
 
 In short: **Tara installs and maintains the guardrails, Copilot uses them.**
+
+About the name: [Tara](https://en.wikipedia.org/wiki/Tara_(Buddhism)) is an important female Buddha in Buddhism. She is known as a saviouress who hears the cries of beings who are 'running around in circles' and saves them from danger.
 
 ## Install
 
