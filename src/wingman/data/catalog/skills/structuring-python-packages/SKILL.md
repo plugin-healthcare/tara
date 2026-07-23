@@ -45,8 +45,8 @@ in `pyproject.toml` and a `py.typed` marker.
 
 ## Conventions
 
-- Follow the Python file conventions in `.github/instructions/python.instructions.md`
-  (native type hints, `pathlib`, `logging` not `print`, ruff).
+- Follow the repo's Python conventions in `.github/copilot-instructions.md` (Python Stack).
+- Add dependencies with `uv add` (never `pip install`); pin Python in `.python-version`.
 - Tests go in top-level `tests/`, never inside `src/`. Run with `uv run pytest`.
 - Lint and format before done: `uv run ruff check --fix && uv run ruff format`.
 - Type-check with `ty`: `uv run ty check .`. Wingman always uses `ty`.
@@ -66,14 +66,10 @@ To apply the tool config, append wingman's canonical block to the generated
 wingman standards --show >> pyproject.toml
 ```
 
-The baseline uses ruff `select = ["ALL"]` with a curated ignore list,
-`line-length = 120`, google docstrings, banned relative imports, strict pytest
-options, a `[tool.ty]` rules block, and `[tool.uv] exclude-newer = "14 days"` so
-freshly published (potentially compromised) versions are held back. The
-`wingman check` gate runs `uv audit`, which flags known CVEs and adverse project
-statuses (archived / deprecated / quarantined). `uv audit` and the duration
-`exclude-newer` need uv >= 0.11. Every dependency must carry a version constraint;
-`wingman standards` warns about unpinned ones.
+`wingman standards --show` is the canonical config (ruff, ty, pytest, uv), so this
+skill does not restate it. The `wingman check` gate also runs `uv audit` for CVEs and
+PEP 792 project statuses (archived / deprecated / quarantined). `uv audit` and the
+`exclude-newer` cooldown need uv >= 0.11; every dependency must carry a version constraint.
 
 Enable the hooks once with `uv run pre-commit install`.
 

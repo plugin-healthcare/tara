@@ -1,54 +1,59 @@
 # Python Stack
 
-Additional instructions for Python projects. Applied on top of the base instructions.
-
-## Package Management
-
-- Use `uv` for all dependency and environment management (`uv add`, `uv run`, `uv sync`).
-- Never use `pip install` directly in a project with a `pyproject.toml`.
-- Never use hatchling or setuptools: the build backend is `uv_build`
-  (`build-backend = "uv_build"`).
-- Pin Python version in `.python-version`.
-- Hold back freshly published releases with `[tool.uv] exclude-newer = "14 days"`
-  so a just-compromised version cannot slip in. Requires uv >= 0.11.
-- Audit dependencies with `uv audit --preview-features audit-command`: it reports
-  known CVEs and adverse project statuses (PEP 792: archived / deprecated /
-  quarantined). Requires uv >= 0.11.
-- Every dependency must declare a version constraint (e.g. `httpx>=0.27`), never a
-  bare package name. `wingman standards` flags unpinned dependencies.
+Extends the base instructions with everyday Python coding conventions. Project
+setup, dependency hygiene, and the tooling baseline live in the
+`structuring-python-packages` skill and `wingman standards`, not here.
 
 ## Code Style
 
-- Formatter and linter: `ruff`. Run `uv run ruff check --fix && uv run ruff format`.
-- The ruff baseline is `select = ["ALL"]` with a curated ignore list, line-length
-  120, and google docstrings. Run `wingman standards --show` for the canonical config.
-- Type hints on all public functions and methods. Type-check with `ty`
-  (`uv run ty check .`); wingman always uses `ty`, not mypy.
-- Prefer `pathlib.Path` over `os.path`.
-- No bare `except:`; always catch specific exceptions.
-- Run the pre-commit hooks (`uv run pre-commit install` once); they run ruff and ty.
+- Format and lint with `ruff` (`uv run ruff check --fix && uv run ruff format`).
+- Type-hint public APIs; check with `ty` (`uv run ty check .`), never mypy.
+- Prefer `pathlib` over `os.path`. Log via `logging` (`getLogger(__name__)`), never `print()`.
+- No bare `except`; catch specific exceptions.
+- Put the exit condition in the `for`/`while`; don't steer a `while True` with scattered
+  `break`/`continue`.
+
+## Structure
+
+- A class is an intentionally named abstraction over cohesive functions on shared data.
+  Reach for one when functions cluster around shared state or shape, else plain
+  functions. No inheritance or polymorphism required.
+- Prefer stateless/immutable classes: build data once (constructor, frozen `dataclass`,
+  or Pydantic `BaseModel`), methods return new values. Functional core, I/O at the edges.
+- Standardise a variant family (plugins/adapters/backends) behind an `abc.ABC` or
+  `typing.Protocol`. Keep inheritance shallow and contract-only; favour composition.
+- No nested `def` unless a closure or decorator needs it; lift to module level or a
+  `_`-prefixed method.
+- One goal per function; if its name needs an "and", split it.
+- Modular, reusable code: small generic utils and cohesive modules with clear
+  interfaces, not copy-paste.
+- Inject collaborators (clients, config) via constructor or arguments, not module
+  singletons or globals.
+- Standardise the approach to cross-cutting concerns but let each module own its own
+  (its logger, its config), so you don't get modules that only look independent.
+
+## Configuration
+
+- Model settings and config with Pydantic (`BaseSettings` for env/app, `BaseModel` for
+  structured), not dicts/argparse/dataclasses. Validate and coerce at the boundary.
+- Parse, don't validate: build the typed model once at the boundary, then trust those
+  types downstream.
+
+## Errors
+
+- Fail fast: check at the boundary and raise immediately, don't limp on with half-valid state.
+- Raise specific exceptions from a small per-package hierarchy (own base `Error`); don't
+  catch a blanket `Exception`.
+- Never swallow errors or signal failure with `None`/sentinels; `raise ... from err` to
+  keep the cause.
 
 ## Data
 
-- Prefer `polars` over `pandas` for all tabular data work.
-- Use lazy evaluation (`pl.LazyFrame`) by default; collect only when needed.
-- When in doubt about Polars API or syntax, use the `polars` MCP server.
+- Prefer `polars` over `pandas`; default to lazy `pl.LazyFrame`, collect only when needed.
+- Unsure on the Polars API? Use the `polars` MCP server.
 
 ## Testing
 
-- Framework: `pytest`. Run with `uv run pytest`.
-- Test-first: write the failing test before the implementation.
-- Structure each test as GIVEN (arrange the conditions), WHEN (run the behaviour),
-  THEN (assert the result).
-- Test files mirror source layout: `src/foo/bar.py` → `tests/foo/test_bar.py`.
-- Use `pytest.mark.parametrize` for data-driven cases.
-- Mock external I/O; tests must be runnable offline.
-
-## Project Layout
-
-```
-src/<package>/    ← application code
-tests/            ← mirrors src/ layout
-pyproject.toml    ← single source of truth for metadata + deps
-.python-version   ← pinned Python version for uv
-```
+- `pytest` (`uv run pytest`), test-first: failing test before the code.
+- Structure tests GIVEN/WHEN/THEN; mirror layout (`src/foo/bar.py` -> `tests/foo/test_bar.py`);
+  `parametrize` data cases; mock I/O so tests run offline.

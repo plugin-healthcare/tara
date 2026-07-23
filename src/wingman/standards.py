@@ -15,18 +15,11 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from wingman.config import StandardsConfig
 from wingman.core import data_path, repo_root
 
-DEFAULT_STACK = "python"
 PYPROJECT = Path("pyproject.toml")
 PRECOMMIT = Path(".pre-commit-config.yaml")
-
-# pyproject [tool.<category>] tables wingman is opinionated about.
-PYPROJECT_CATEGORIES = ["ruff", "pytest", "ty", "uv"]
-
-# Dev tools the standard expects to be runnable via `uv run` and pre-commit.
-# `uv audit` is native to uv, so it needs no dependency of its own.
-DEV_TOOLS = ["ruff", "ty", "pytest", "pre-commit"]
 
 _VERSION_OP = re.compile(r"[<>=!~]")
 
@@ -38,7 +31,7 @@ class CategoryStatus:
 
 
 def standard_dir(stack: str | None) -> Path:
-    return data_path() / "standards" / (stack or DEFAULT_STACK)
+    return data_path() / "standards" / (stack or StandardsConfig.load().default_stack)
 
 
 def pyproject_tools_text(stack: str | None) -> str:
@@ -55,13 +48,14 @@ def _pyproject_standard(stack: str | None) -> dict:
 
 def compare_pyproject(stack: str | None) -> list[CategoryStatus]:
     """Per-category status of the repo's pyproject tool tables vs the standard."""
+    categories = StandardsConfig.load().pyproject_categories
     std = _pyproject_standard(stack)
     path = repo_root() / PYPROJECT
     if not path.exists():
-        return [CategoryStatus(c, "no-pyproject") for c in PYPROJECT_CATEGORIES]
+        return [CategoryStatus(c, "no-pyproject") for c in categories]
     repo_tool = tomllib.loads(path.read_text()).get("tool", {})
     out: list[CategoryStatus] = []
-    for cat in PYPROJECT_CATEGORIES:
+    for cat in categories:
         have = repo_tool.get(cat)
         if have is None:
             out.append(CategoryStatus(cat, "missing"))
@@ -136,7 +130,7 @@ def missing_dev_tools() -> list[str]:
     if not (repo_root() / PYPROJECT).exists():
         return []
     have = declared_dependency_names()
-    return [t for t in DEV_TOOLS if t not in have]
+    return [t for t in StandardsConfig.load().dev_tools if t not in have]
 
 
 def add_dev_tools(tools: list[str], dry_run: bool = False) -> tuple[bool, str]:
@@ -163,5 +157,5 @@ def _run_uv(cmd: list[str]) -> tuple[bool, str]:
     try:
         proc = subprocess.run(cmd, cwd=repo_root())
     except OSError:
-        return False, f"{joined} (uv not found — install uv or activate a virtualenv)"
+        return False, f"{joined} (uv not found; install uv or activate a virtualenv)"
     return proc.returncode == 0, joined

@@ -19,7 +19,9 @@ Definition of Done in `.github/copilot-instructions.md`.
 7. Finish with clear **test-drive instructions**: the exact commands or example a
    developer runs to see the new feature work.
 
-Never commit or push. Stage the change and hand off to the developer.
+Work on a `<type>/<short-description>` branch (e.g. `feat/add-auth`). Never commit or
+push: stage the change, draft the commit message (imperative mood, subject <= 72 chars),
+and hand off to the developer.
 
-Finally, record the hand-off in the `.agent/tracking/` log (schema and command
-in `.github/copilot-instructions.md`).
+Finally, record the hand-off in the `.agent/tracking/` log (schema and commands in
+`.agent/tracking/README.md`).

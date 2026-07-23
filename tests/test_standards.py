@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from wingman import standards
+from wingman.config import StandardsConfig
 
 
 def test_no_pyproject_reports_no_pyproject(repo):
     statuses = {c.name: c.status for c in standards.compare_pyproject("python")}
-    assert set(statuses) == set(standards.PYPROJECT_CATEGORIES)
+    assert set(statuses) == set(StandardsConfig().pyproject_categories)
     assert all(s == "no-pyproject" for s in statuses.values())
 
 

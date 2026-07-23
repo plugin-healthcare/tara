@@ -79,8 +79,7 @@ them.
 
 ## Conventions
 
-- Follow `.github/instructions/python.instructions.md` (type hints, `pathlib`,
-  `logging` not `print`, ruff).
+- Follow the repo's Python conventions in `.github/copilot-instructions.md`.
 - Ship sample data in `data/` so `uv run streamlit run app.py` works immediately.
 - Test `backend/` with `uv run pytest`; run the app to verify the views.
 

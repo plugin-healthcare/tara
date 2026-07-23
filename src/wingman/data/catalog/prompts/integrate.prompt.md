@@ -11,16 +11,16 @@ under GitHub flow (`main` <- feature branch, hotfix straight off `main`).
    Flag anything that pulls the project off course.
 2. **Standards and structure**: it follows repo rules, coding standards, and the project
    layout in `.github/copilot-instructions.md` and scoped instructions.
-3. **Wiring**: the feature is actually connected — entry points, config, and call sites
+3. **Wiring**: the feature is actually connected: entry points, config, and call sites
    are in place. No dead, duplicated, or orphaned code.
 4. **Gate**: `wingman check` passes (lint, format, types, tests, security) and the
-   Definition of Done is met.
-5. **Versioning**: bump the version per semver (x.y.z — major breaks, minor adds, patch
+   Definition of Done is met. Flag flaky tests; don't re-run until they pass by luck.
+5. **Versioning**: bump the version per semver (x.y.z: major breaks, minor adds, patch
    fixes; docs-only changes do not bump) and update the changelog, using the
    `release-semver-changelog` skill.
 6. Draft the PR description: what changed, why, and how to test it.
 
 Never merge, commit, or push. Report readiness and hand off to the developer.
 
-Finally, record the hand-off in the `.agent/tracking/` log (schema and command
-in `.github/copilot-instructions.md`).
+Finally, record the hand-off in the `.agent/tracking/` log (schema and commands in
+`.agent/tracking/README.md`).

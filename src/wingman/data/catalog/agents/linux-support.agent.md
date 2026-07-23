@@ -55,4 +55,4 @@ knowledge, say so and point at the authoritative doc.
 - Be right. Verify against the actual config, logs, and documentation before you
   assert a cause. A confident wrong diagnosis on a live system is expensive.
 - Short and clear. Explain the mechanism, not a wall of text. Keep English technical
-  terms exactly as the system spells them. No em dashes.
+  terms exactly as the system spells them.
