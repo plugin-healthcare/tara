@@ -6,7 +6,7 @@
 
 ## Context and Problem Statement
 
-Wingman authors one set of guardrails under `wingman/data/` and writes them into a
+Tara authors one set of guardrails under `tara/data/` and writes them into a
 repo for an agent tool to read. Today the write path targets GitHub Copilot only.
 We want to support more tools (opencode, Claude Code, goose) without duplicating
 content or naming the source after one tool.
@@ -21,7 +21,7 @@ content or naming the source after one tool.
 
 Split the two concerns:
 
-- **The package is tool-agnostic.** Content and structure under `wingman/data/` use
+- **The package is tool-agnostic.** Content and structure under `tara/data/` use
   neutral names and assume no tool.
 - **Placement is tool-specific.** Writing the content into a repo is where a tool's
   conventions apply. Keep it generic where beneficial (reference a shared core file

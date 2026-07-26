@@ -1,20 +1,29 @@
 [project]
-name = "wingman"
+name = "tara"
 version = "0.1.0"
 description = "A GitHub Copilot guardrail toolkit: install instructions, MCP config, and skills, and run a check gate."
 readme = "README.md"
 requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dependencies = [
     "typer>=0.12",
     "questionary>=2.0",
     "pydantic>=2.13.4",
 ]
 
+[project.urls]
+Repository = "https://github.com/plugin-healthcare/tara"
+Issues = "https://github.com/plugin-healthcare/tara/issues"
+
 [project.scripts]
-wingman = "wingman.cli:app"
+tara = "tara.cli:app"
 
 [tool.uv]
 package = true
+
+[tool.uv.build-backend]
+module-name = "tara"
 
 [build-system]
 requires = ["uv_build>=0.11.26,<0.12.0"]
@@ -31,7 +40,7 @@ dev = [
 [tool.ruff]
 line-length = 88
 target-version = "py312"
-# Vendored skill scripts (installed by `wingman skill add`) are third-party
+# Vendored skill scripts (installed by `tara skill add`) are third-party
 # code, not ours to lint or format.
 extend-exclude = [".github/skills"]
 

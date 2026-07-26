@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from wingman import tracking
+from tara import tracking
 
 
 def test_write_tracking_creates_folder_db_readme_and_gitignore(repo):
@@ -49,7 +49,7 @@ def test_dry_run_writes_nothing(repo):
 
 
 def test_config_opt_out_of_gitignore(repo):
-    cfg = repo / ".wingman"
+    cfg = repo / ".tara"
     cfg.mkdir()
     (cfg / "config.toml").write_text("[tracking]\ngitignore = false\n")
 
@@ -60,7 +60,7 @@ def test_config_opt_out_of_gitignore(repo):
 
 
 def test_config_custom_dir(repo):
-    cfg = repo / ".wingman"
+    cfg = repo / ".tara"
     cfg.mkdir()
     (cfg / "config.toml").write_text('[tracking]\ndir = ".notes/tracking"\n')
 

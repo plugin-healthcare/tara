@@ -1,0 +1,26 @@
+# Default check gate for Python projects (`tara check`).
+# Override per-repo by creating `.tara/checks.toml` with the same schema.
+#
+# `types` and `security` require uv >= 0.11 (for `ty` via `uv run` and `uv audit`).
+# `uv audit` reports known CVEs and adverse project statuses (PEP 792:
+# archived / deprecated / quarantined). It is a preview feature, hence the flag.
+
+[[check]]
+name = "lint"
+cmd = "uv run ruff check"
+
+[[check]]
+name = "format"
+cmd = "uv run ruff format --check"
+
+[[check]]
+name = "types"
+cmd = "uv run ty check ."
+
+[[check]]
+name = "test"
+cmd = "uv run pytest --tb=short"
+
+[[check]]
+name = "security"
+cmd = "uv audit --preview-features audit-command"

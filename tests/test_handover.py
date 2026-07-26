@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from wingman import handover
+from tara import handover
 
 
 def test_write_handover_creates_folder_readme_and_gitignore(repo):
@@ -39,7 +39,7 @@ def test_dry_run_writes_nothing(repo):
 
 
 def test_config_opt_out_of_gitignore(repo):
-    cfg = repo / ".wingman"
+    cfg = repo / ".tara"
     cfg.mkdir()
     (cfg / "config.toml").write_text("[handover]\ngitignore = false\n")
 
@@ -50,7 +50,7 @@ def test_config_opt_out_of_gitignore(repo):
 
 
 def test_config_custom_dir(repo):
-    cfg = repo / ".wingman"
+    cfg = repo / ".tara"
     cfg.mkdir()
     (cfg / "config.toml").write_text('[handover]\ndir = ".notes/agent"\n')
 

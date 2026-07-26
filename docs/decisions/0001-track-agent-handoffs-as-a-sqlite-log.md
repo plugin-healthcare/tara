@@ -8,21 +8,21 @@
 
 Each phase of the fixed flow ends in a hand-off, but that state only lives in prose
 under `.agent/memory/`, which can't be queried. How do we track phase hand-offs so
-they're queryable and optionally shareable, without turning wingman into a runtime or
+they're queryable and optionally shareable, without turning tara into a runtime or
 adding a dependency?
 
 ## Considered Options
 
 - A SQLite database written by the runtime.
 - Parquet files (one per hand-off) queried with DuckDB.
-- A `wingman handoff` CLI that owns writes and queries.
+- A `tara handoff` CLI that owns writes and queries.
 
 ## Decision Outcome
 
 Chosen option: **a single SQLite database, `.agent/tracking/handoffs.db`**. `sqlite3`
 ships with the Python standard library, so writing and reading the log needs no
 project dependency; the SQLite file format is a stable, documented open standard; and
-WAL mode lets concurrent sessions append safely. Wingman creates the empty database
+WAL mode lets concurrent sessions append safely. Tara creates the empty database
 (idempotent schema), wires the `.gitignore` opt-out, and documents the schema; the
 runtime appends one row per hand-off with a parameterised `INSERT`. Git-ignored by
 default; opt in to commit via `[tracking] gitignore = false`.

@@ -1,1 +1,0 @@
-"""wingman — agent superpowers CLI."""

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from wingman import standards
-from wingman.config import StandardsConfig
+from tara import standards
+from tara.config import StandardsConfig
 
 
 def test_no_pyproject_reports_no_pyproject(repo):
