@@ -27,6 +27,7 @@ from tara import agent_docs as agent_docs_mod
 from tara import audit as audit_mod
 from tara import catalog as catalog_mod
 from tara import check as check_mod
+from tara import config as config_mod
 from tara import docs as docs_mod
 from tara import opencode as opencode_mod
 from tara import review as review_mod
@@ -203,6 +204,7 @@ def init(
     typer.echo(write_instructions(stack, dry_run))
     typer.echo(write_mcp(stack, dry_run))
     typer.echo(agent_docs_mod.write_agent_docs(dry_run))
+    typer.echo(config_mod.write_config(tool, stack or "python", dry_run))
 
     # Mandatory tooling for the check gate + pre-commit hook (python stack).
     if (stack or "python") == "python":

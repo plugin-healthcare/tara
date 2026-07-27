@@ -1,6 +1,6 @@
 [project]
 name = "tara"
-version = "0.1.0"
+version = "1.0.0"
 description = "A GitHub Copilot guardrail toolkit: install instructions, MCP config, and skills, and run a check gate."
 readme = "README.md"
 requires-python = ">=3.12"
