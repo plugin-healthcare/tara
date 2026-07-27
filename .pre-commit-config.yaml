@@ -1,3 +1,11 @@
+# Tara's opinionated pre-commit standard.
+#
+# Install into your repo with `uv run pre-commit install`, then it runs on every
+# commit. Keep the ruff/ty hook versions in sync with the versions in your
+# dependency groups.
+#
+# gitleaks blocks committed secrets; actionlint + zizmor lint and security-audit
+# GitHub Actions workflows (they only run when workflow/action files change).
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -19,3 +27,16 @@ repos:
     rev: v0.0.60
     hooks:
       - id: ty
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.26.1
+    hooks:
+      - id: zizmor

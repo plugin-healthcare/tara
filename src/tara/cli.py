@@ -4,7 +4,7 @@ Installed per-repo. Every command operates on the current working directory.
 Copilot's .github/ setup is the single source of truth; opencode files are a
 generated port of it.
 Commands:
-  init      write instructions + MCP + pick items; --tool opencode|all also ports
+  init      write instructions + MCP + memory; --tool opencode|all also ports
   add       pick and install more catalog artifacts (skills/agents/prompts/instructions)
   skill     manage skills directly (add/list/update/remove)
   agent     manage bundled agents directly (list/add)
@@ -27,11 +27,13 @@ from tara import audit as audit_mod
 from tara import catalog as catalog_mod
 from tara import check as check_mod
 from tara import docs as docs_mod
+from tara import handover as handover_mod
 from tara import opencode as opencode_mod
 from tara import review as review_mod
 from tara import skills as skills_mod
 from tara import standards as standards_mod
 from tara import sync as sync_mod
+from tara import tracking as tracking_mod
 from tara.core import (
     ALL_TOOLS,
     OPENCODE,
@@ -183,7 +185,7 @@ def init(
     all_: AllOpt = False,
     dry_run: DryRun = False,
 ) -> None:
-    """Set up this repo: write Copilot instructions + MCP, then pick artifacts.
+    """Set up this repo: Copilot core, MCP, agent memory, tooling, then artifacts.
 
     Copilot's .github/ setup is always the source. ``--tool opencode`` or
     ``--tool all`` additionally port that setup into opencode files
@@ -196,27 +198,31 @@ def init(
         raise typer.Exit(1) from exc
 
     port = tool in (OPENCODE, ALL_TOOLS)
-    typer.echo(f"Setting up copilot for stack: {stack}")
+
+    typer.echo(f"Setting up Copilot for stack: {stack}")
+    typer.echo("\nCore setup:")
     typer.echo(write_instructions(stack, dry_run))
     typer.echo(write_mcp(stack, dry_run))
+    typer.echo(handover_mod.write_handover(dry_run))
+    typer.echo(tracking_mod.write_tracking(dry_run))
+
+    # Mandatory tooling for the check gate + pre-commit hook (python stack).
+    if (stack or "python") == "python":
+        _report_standards("python", write=True, dry_run=dry_run)
+        _offer_dev_tools("python", dry_run=dry_run)
 
     if dry_run:
-        typer.echo("\n[dry-run] skipping artifact selection")
+        typer.echo("\n[dry-run] skipping optional artifact selection")
         if port:
             _echo_port(dry_run=True)
         return
-    _select_and_install(MENU_KINDS, all_)
 
-    # Core is now in place. Offer the package-driven sync as an opt-in extra:
-    # it only adds skills shipped by installed deps and never touches the core.
+    # Optional extras: pick catalog artifacts, then scan installed packages.
+    _select_and_install(MENU_KINDS, all_)
     if sys.stdin.isatty() and typer.confirm(
         "\nAlso scan installed packages for skills to sync?", default=False
     ):
         _run_sync(all_=False, docs=True)
-
-    # Surface the opinionated tooling standard and write pre-commit if absent.
-    if (stack or "python") == "python":
-        _report_standards("python", write=True, dry_run=dry_run)
 
     if port:
         _echo_port(dry_run=False)
@@ -606,10 +612,51 @@ def _report_standards(stack: str, *, write: bool, dry_run: bool) -> None:
     else:
         typer.echo("  dependencies   ok (all pinned)")
 
+    missing_tools = standards_mod.missing_dev_tools()
+    if missing_tools:
+        typer.echo(f"  dev tools      missing: {', '.join(missing_tools)}")
+    else:
+        typer.echo("  dev tools      ok (ruff, ty, pytest, pre-commit declared)")
+
     if any(cs.status != "ok" for cs in categories):
         typer.echo(
             "  → run `tara standards --show` for the canonical tool block to paste"
         )
+
+
+def _offer_dev_tools(stack: str, *, dry_run: bool) -> None:
+    """Add the standard's required dev tools, then install the hook if wanted."""
+    missing = standards_mod.missing_dev_tools()
+    if not missing:
+        return
+    joined = " ".join(missing)
+    if dry_run:
+        typer.echo(f"  [dry-run] uv add --dev {joined}")
+        return
+    if not (
+        sys.stdin.isatty()
+        and typer.confirm(
+            f"\nInstall required dev tools for the check gate ({', '.join(missing)})?",
+            default=True,
+        )
+    ):
+        typer.echo(f"  skipped — add later with `uv add --dev {joined}`")
+        return
+    ok, cmd = standards_mod.add_dev_tools(missing, dry_run)
+    typer.echo(f"  {'ran' if ok else 'failed'}: {cmd}")
+    if not ok:
+        return
+    precommit_exists = (repo_root() / standards_mod.PRECOMMIT).exists()
+    if (
+        "pre-commit" in missing
+        and precommit_exists
+        and typer.confirm(
+            "Install the git pre-commit hook now (uv run pre-commit install)?",
+            default=True,
+        )
+    ):
+        hook_ok, hook_cmd = standards_mod.install_precommit_hook(dry_run)
+        typer.echo(f"  {'ran' if hook_ok else 'failed'}: {hook_cmd}")
 
 
 @app.command()

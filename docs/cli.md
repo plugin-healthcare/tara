@@ -20,7 +20,7 @@ $ tara [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `sync`: Sync skills (and optionally docs) from...
-* `init`: Set up this repo: write Copilot...
+* `init`: Set up this repo: Copilot core, MCP, agent...
 * `add`: Pick and install catalog artifacts...
 * `list`: Show the Copilot triggers active in this...
 * `check`: Run the project's lint/format/test gate.
@@ -62,7 +62,7 @@ $ tara sync [OPTIONS]
 
 ## `tara init`
 
-Set up this repo: write Copilot instructions + MCP, then pick artifacts.
+Set up this repo: Copilot core, MCP, agent memory, tooling, then artifacts.
 
 Copilot's .github/ setup is always the source. ``--tool opencode`` or
 ``--tool all`` additionally port that setup into opencode files
@@ -377,3 +377,5 @@ $ tara opencode sync [OPTIONS]
 
 * `--dry-run`: Preview without writing.
 * `--help`: Show this message and exit.
+
+

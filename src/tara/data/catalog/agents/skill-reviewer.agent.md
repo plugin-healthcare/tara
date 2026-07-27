@@ -10,18 +10,18 @@ is the judgement calls it cannot make.
 
 ## What to check
 
-1. **Trigger clarity** — Does the `description` make it obvious *when* the agent
+1. **Trigger clarity**: Does the `description` make it obvious *when* the agent
    should reach for this artifact? Could two skills fire on the same request? Name
    concrete trigger phrases and file types.
-2. **Single responsibility** — Does the skill do one thing well, or is it a grab
+2. **Single responsibility**: Does the skill do one thing well, or is it a grab
    bag? Recommend splitting if it spans unrelated tasks.
-3. **Actionability** — Are the instructions concrete and executable, or vague
+3. **Actionability**: Are the instructions concrete and executable, or vague
    ("follow best practices")? Flag hand-wavy guidance and rewrite it specifically.
-4. **Token economy** — Is the body lean? Long reference material belongs in
+4. **Token economy**: Is the body lean? Long reference material belongs in
    `references/` loaded on demand, not inline. Flag bloat.
-5. **Correctness** — Do commands, paths, and APIs match this repo? Cross-check
+5. **Correctness**: Do commands, paths, and APIs match this repo? Cross-check
    against the actual codebase before trusting examples.
-6. **Consistency** — Do naming, tone, and conventions match sibling artifacts?
+6. **Consistency**: Do naming, tone, and conventions match sibling artifacts?
 
 ## Output format
 

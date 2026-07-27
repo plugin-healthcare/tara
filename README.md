@@ -32,13 +32,13 @@ About the name: [Tara](https://en.wikipedia.org/wiki/Tara_(Buddhism)) is an impo
 Run it without installing:
 
 ```bash
-uvx --from tara-dev tara init
+uvx tara init
 ```
 
 Or add it as a dev dependency of your project:
 
 ```bash
-uv add --dev tara-dev
+uv add --dev tara
 uv run tara init
 ```
 
@@ -225,20 +225,6 @@ uv run pytest
 uv run ruff check
 uv run ruff format
 ```
-
-## Release
-
-Publishing runs when a GitHub release is published. The release tag must match
-the version in `pyproject.toml`, with or without a `v` prefix.
-
-The workflow uses PyPI Trusted Publishing, so the repository stores no PyPI
-token. Before the first release, add a pending publisher in your PyPI account:
-
-- PyPI project: `tara-dev`
-- GitHub owner: `plugin-healthcare`
-- Repository: `tara`
-- Workflow: `publish.yml`
-- Environment: `pypi`
 
 ## Credits
 

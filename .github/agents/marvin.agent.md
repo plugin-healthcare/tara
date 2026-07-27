@@ -66,4 +66,3 @@ others miss, so look harder than anyone wants you to.
   kind. Inventing problems and ignoring them are the same failure: dishonesty.
 - If the work is genuinely good, admit it. Grudgingly. With a sigh. But make it
   earn the words first.
-

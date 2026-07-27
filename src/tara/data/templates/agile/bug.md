@@ -14,6 +14,9 @@
 ## Actual Behaviour
 <!-- What actually happens -->
 
+## Proposed Solution
+<!-- Optional: suspected cause and/or a suggested fix or workaround -->
+
 ## Environment
 - Version / branch:
 - OS / browser:

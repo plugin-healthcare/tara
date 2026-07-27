@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from tara import standards
+from tara.config import StandardsConfig
 
 
 def test_no_pyproject_reports_no_pyproject(repo):
     statuses = {c.name: c.status for c in standards.compare_pyproject("python")}
-    assert set(statuses) == set(standards.PYPROJECT_CATEGORIES)
+    assert set(statuses) == set(StandardsConfig().pyproject_categories)
     assert all(s == "no-pyproject" for s in statuses.values())
 
 
@@ -80,3 +81,48 @@ def test_pinned_dependencies_are_clean(repo):
         'dependencies = ["httpx>=0.27", "typer==0.12.0", "tool @ git+https://x/y"]\n'
     )
     assert standards.unpinned_dependencies() == []
+
+
+def test_missing_dev_tools_none_without_pyproject(repo):
+    assert standards.missing_dev_tools() == []
+
+
+def test_missing_dev_tools_lists_absent_tools(repo):
+    (repo / "pyproject.toml").write_text(
+        "[project]\n"
+        "name = 't'\n"
+        "version = '0.1.0'\n\n"
+        "[dependency-groups]\n"
+        'dev = ["ruff>=0.15", "pytest>=9"]\n'
+    )
+    # ruff + pytest present; ty + pre-commit still missing.
+    assert standards.missing_dev_tools() == ["ty", "pre-commit"]
+
+
+def test_missing_dev_tools_empty_when_all_present(repo):
+    (repo / "pyproject.toml").write_text(
+        "[project]\n"
+        "name = 't'\n"
+        "version = '0.1.0'\n\n"
+        "[dependency-groups]\n"
+        'dev = ["ruff", "ty", "pytest", "pre-commit"]\n'
+    )
+    assert standards.missing_dev_tools() == []
+
+
+def test_add_dev_tools_dry_run_builds_command(repo):
+    ok, cmd = standards.add_dev_tools(["ty", "pre-commit"], dry_run=True)
+    assert ok
+    assert cmd == "[dry-run] uv add --dev ty pre-commit"
+
+
+def test_add_dev_tools_noop_for_empty_list(repo):
+    ok, msg = standards.add_dev_tools([], dry_run=False)
+    assert ok
+    assert "no dev tools" in msg
+
+
+def test_install_precommit_hook_dry_run(repo):
+    ok, cmd = standards.install_precommit_hook(dry_run=True)
+    assert ok
+    assert cmd == "[dry-run] uv run pre-commit install"

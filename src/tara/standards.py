@@ -10,18 +10,16 @@ it never edits an existing ``pyproject.toml`` (it only reports).
 from __future__ import annotations
 
 import re
+import subprocess
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from tara.config import StandardsConfig
 from tara.core import data_path, repo_root
 
-DEFAULT_STACK = "python"
 PYPROJECT = Path("pyproject.toml")
 PRECOMMIT = Path(".pre-commit-config.yaml")
-
-# pyproject [tool.<category>] tables Tara is opinionated about.
-PYPROJECT_CATEGORIES = ["ruff", "pytest", "ty", "uv"]
 
 _VERSION_OP = re.compile(r"[<>=!~]")
 
@@ -33,7 +31,7 @@ class CategoryStatus:
 
 
 def standard_dir(stack: str | None) -> Path:
-    return data_path() / "standards" / (stack or DEFAULT_STACK)
+    return data_path() / "standards" / (stack or StandardsConfig.load().default_stack)
 
 
 def pyproject_tools_text(stack: str | None) -> str:
@@ -50,13 +48,14 @@ def _pyproject_standard(stack: str | None) -> dict:
 
 def compare_pyproject(stack: str | None) -> list[CategoryStatus]:
     """Per-category status of the repo's pyproject tool tables vs the standard."""
+    categories = StandardsConfig.load().pyproject_categories
     std = _pyproject_standard(stack)
     path = repo_root() / PYPROJECT
     if not path.exists():
-        return [CategoryStatus(c, "no-pyproject") for c in PYPROJECT_CATEGORIES]
+        return [CategoryStatus(c, "no-pyproject") for c in categories]
     repo_tool = tomllib.loads(path.read_text()).get("tool", {})
     out: list[CategoryStatus] = []
-    for cat in PYPROJECT_CATEGORIES:
+    for cat in categories:
         have = repo_tool.get(cat)
         if have is None:
             out.append(CategoryStatus(cat, "missing"))
@@ -101,6 +100,13 @@ def _is_pinned(req: str) -> bool:
 
 def unpinned_dependencies() -> list[str]:
     """Names of pyproject dependencies (incl. groups/extras) that lack a version."""
+    unpinned = {_requirement_name(r) for r in _all_requirements() if not _is_pinned(r)}
+    unpinned.discard("")
+    return sorted(unpinned)
+
+
+def _all_requirements() -> list[str]:
+    """Every requirement string in pyproject: deps, extras, and dependency groups."""
     path = repo_root() / PYPROJECT
     if not path.exists():
         return []
@@ -111,6 +117,45 @@ def unpinned_dependencies() -> list[str]:
         reqs += extra
     for group in (data.get("dependency-groups") or {}).values():
         reqs += [g for g in group if isinstance(g, str)]
-    unpinned = {_requirement_name(r) for r in reqs if not _is_pinned(r)}
-    unpinned.discard("")
-    return sorted(unpinned)
+    return reqs
+
+
+def declared_dependency_names() -> set[str]:
+    """Lower-cased names of every dependency declared in pyproject."""
+    return {_requirement_name(r).lower() for r in _all_requirements()} - {""}
+
+
+def missing_dev_tools() -> list[str]:
+    """Standard dev tools (ruff/ty/pytest/pre-commit) not yet declared as deps."""
+    if not (repo_root() / PYPROJECT).exists():
+        return []
+    have = declared_dependency_names()
+    return [t for t in StandardsConfig.load().dev_tools if t not in have]
+
+
+def add_dev_tools(tools: list[str], dry_run: bool = False) -> tuple[bool, str]:
+    """Add ``tools`` to the dev dependency group via ``uv add --dev``."""
+    if not tools:
+        return True, "no dev tools to add"
+    cmd = ["uv", "add", "--dev", *tools]
+    if dry_run:
+        return True, "[dry-run] " + " ".join(cmd)
+    return _run_uv(cmd)
+
+
+def install_precommit_hook(dry_run: bool = False) -> tuple[bool, str]:
+    """Install the git pre-commit hook via ``uv run pre-commit install``."""
+    cmd = ["uv", "run", "pre-commit", "install"]
+    if dry_run:
+        return True, "[dry-run] " + " ".join(cmd)
+    return _run_uv(cmd)
+
+
+def _run_uv(cmd: list[str]) -> tuple[bool, str]:
+    """Run a ``uv`` command, returning (ok, message) without raising if uv is absent."""
+    joined = " ".join(cmd)
+    try:
+        proc = subprocess.run(cmd, cwd=repo_root())
+    except OSError:
+        return False, f"{joined} (uv not found; install uv or activate a virtualenv)"
+    return proc.returncode == 0, joined
