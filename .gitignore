@@ -17,10 +17,9 @@ dist/
 .env
 .env.*
 !.env.example
-.agent/
 
 # Reproducible vendored skills; .tara manifests remain tracked.
 .github/skills/
 
-# Wingman: agent memory / handover scratch, local only
+# Tara: agent memory / handover scratch, local only
 .agent/

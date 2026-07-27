@@ -23,17 +23,16 @@ from typing import Annotated
 
 import typer
 
+from tara import agent_docs as agent_docs_mod
 from tara import audit as audit_mod
 from tara import catalog as catalog_mod
 from tara import check as check_mod
 from tara import docs as docs_mod
-from tara import handover as handover_mod
 from tara import opencode as opencode_mod
 from tara import review as review_mod
 from tara import skills as skills_mod
 from tara import standards as standards_mod
 from tara import sync as sync_mod
-from tara import tracking as tracking_mod
 from tara.core import (
     ALL_TOOLS,
     OPENCODE,
@@ -203,8 +202,7 @@ def init(
     typer.echo("\nCore setup:")
     typer.echo(write_instructions(stack, dry_run))
     typer.echo(write_mcp(stack, dry_run))
-    typer.echo(handover_mod.write_handover(dry_run))
-    typer.echo(tracking_mod.write_tracking(dry_run))
+    typer.echo(agent_docs_mod.write_agent_docs(dry_run))
 
     # Mandatory tooling for the check gate + pre-commit hook (python stack).
     if (stack or "python") == "python":

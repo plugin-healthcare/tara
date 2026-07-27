@@ -25,7 +25,10 @@ def render() -> str:
     """Return the full CLI reference as Markdown."""
     cmd = get_command(app)
     ctx = typer.Context(cmd, info_name="tara")
-    return HEADER + get_docs_for_click(obj=cmd, ctx=ctx, name="tara") + "\n"
+    body = get_docs_for_click(obj=cmd, ctx=ctx, name="tara")
+    # Exactly one trailing newline so the output agrees with the
+    # end-of-file-fixer pre-commit hook (avoids a generate/lint tug-of-war).
+    return HEADER + body.rstrip() + "\n"
 
 
 def main() -> None:

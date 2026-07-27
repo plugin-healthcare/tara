@@ -22,5 +22,5 @@ under GitHub flow (`main` <- feature branch, hotfix straight off `main`).
 
 Never merge, commit, or push. Report readiness and hand off to the developer.
 
-Finally, record the hand-off in the `.agent/tracking/` log (schema and commands in
-`.agent/tracking/README.md`).
+Finally, note the hand-off in `.agent/memory/` and keep its `index.md` current so
+the next session can continue.

@@ -1,4 +1,4 @@
-# ADR-0002: tool-agnostic package, tool-specific placement
+# ADR-0001: tool-agnostic package, tool-specific placement
 
 - **Status:** Accepted
 - **Date:** 2026-07-20

@@ -48,23 +48,25 @@ review, release). Don't skip steps; if one genuinely doesn't apply, say why.
 
 When blocked, say so; don't silently guess.
 
-## Agent memory / handover
+## Agent memory / working docs
 
-- Write session notes, handover docs, and scratch memory to the `.agent/memory/`
-  folder (framework-agnostic, created by `tara init`). Its contents are
-  git-ignored by default, so use it freely for work-in-progress state that the
-  next session or agent can pick up.
-- Keep these docs short and current: what was done, what's left, and any open
+`tara init` creates a framework-agnostic `.agent/` doc store (git-ignored, local
+working knowledge) with a folder per standardized doc you produce:
+
+- `.agent/memory/` -- freeform session notes and handover scratch.
+- `.agent/planning/` -- plans and execution plans.
+- `.agent/reviews/` -- code and maturity reviews.
+
+- Name each doc `YYYY-MM-DD-<slug>.md` (date first, so a folder sorts by time).
+- Keep each folder's `index.md` current: one row per doc (date, file, one-line
+  summary), newest first, so the next session can scan it instead of opening
+  every file.
+- At the end of each phase (refine, design, implement, review, integrate), and
+  whenever you hand work off, drop a short note in `.agent/memory/` and file any
+  plan or review under `.agent/planning/` or `.agent/reviews/`.
+- Keep docs short and current: what was done, what's left, and any open
   decisions. Don't duplicate them into commits or the repo's real docs.
 - Never put secrets or credentials here; git-ignored is not private.
-
-### Hand-off log (queryable)
-
-At the end of each phase (refine, design, implement, review, integrate) and whenever
-you hand work off, append one row to `.agent/tracking/handoffs.db`. It is git-ignored
-by default; never write secrets there. The generated `.agent/tracking/README.md` has
-the schema and the exact append/query commands (standard-library `sqlite3`, or DuckDB
-via `sqlite_scan`); `docs/decisions/0001-*.md` has the rationale.
 
 ## Safety: destructive operations
 

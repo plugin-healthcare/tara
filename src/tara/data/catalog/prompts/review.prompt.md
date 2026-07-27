@@ -18,5 +18,5 @@ criteria, Definition of Done, and any ADRs it references, plus the fixed flow in
 Format as a prioritised list: `[blocker]`, `[suggestion]`, `[nit]`.
 End with a one-line verdict: is the Definition of Done met, or what is missing.
 
-Finally, record the hand-off in the `.agent/tracking/` log (schema and commands in
-`.agent/tracking/README.md`).
+Finally, file your review as `.agent/reviews/YYYY-MM-DD-<slug>.md`, add a row to
+`.agent/reviews/index.md`, and note the hand-off in `.agent/memory/`.

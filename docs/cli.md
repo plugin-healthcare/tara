@@ -377,5 +377,3 @@ $ tara opencode sync [OPTIONS]
 
 * `--dry-run`: Preview without writing.
 * `--help`: Show this message and exit.
-
-

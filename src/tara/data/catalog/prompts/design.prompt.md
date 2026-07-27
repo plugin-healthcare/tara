@@ -22,5 +22,5 @@ Design phase of the flow. Decide *how* to build something before writing feature
 
 Do not write feature code in this phase. Output the decision and diagrams, and stop.
 
-Finally, record the hand-off in the `.agent/tracking/` log (schema and commands in
-`.agent/tracking/README.md`).
+Finally, note the hand-off in `.agent/memory/` and keep its `index.md` current so
+the next session can continue.

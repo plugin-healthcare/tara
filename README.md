@@ -9,6 +9,21 @@ and runs a check gate that "programs and checks like me".
 
 Tara is Python + uv focused and **GitHub Copilot only**.
 
+## Why use it
+
+GitHub Copilot is more useful when it knows how your project is built: its
+conventions, the tools it uses, and the quality bar a change has to clear.
+Without that context it guesses, and the guesses drift from how you actually
+work. Tara writes the context into the files Copilot already reads, so its
+suggestions follow your project instead of a generic default.
+
+If you are new to a stack, Tara also gives you a sensible starting point: an
+opinionated Python setup (ruff, `ty`, pytest, uv, and a pre-commit hook) and one
+command, `tara check`, that runs the same lint, type, test, and dependency
+checks a reviewer would. You get a working baseline without wiring it together
+yourself, and everything Tara writes is a plain file you can read, edit, or
+remove.
+
 ## What Tara is (and is not)
 
 There is a clean split between the two halves of the workflow:
@@ -86,6 +101,8 @@ Full reference (every command, flag, and argument) is auto-generated in
   agents/<name>.agent.md           # custom agents
   prompts/<name>.prompt.md         # slash-command prompts
 .mcp.json                          # MCP servers (Copilot CLI "mcpServers" schema)
+.agent/                            # git-ignored working docs (agent memory)
+  memory/ planning/ reviews/       # each seeded with an index.md
 .tara/
   skills.toml                      # skill manifest (source of truth)
   skills.lock                      # pinned commits
