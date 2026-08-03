@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tara import agent_docs
 
 
@@ -39,12 +41,39 @@ def test_gitignore_list_appends_to_existing_gitignore(repo):
     assert ".agents/memory/" in gi  # appended
 
 
+def test_gitignore_list_multiple_subfolders_share_one_marker(repo):
+    agent_docs.write_agent_docs(dry_run=False, gitignore=["memory", "review"])
+    gi = (repo / agent_docs.GITIGNORE).read_text()
+    assert ".agents/memory/" in gi
+    assert ".agents/review/" in gi
+    assert ".agents/plan/" not in gi
+    assert gi.count(agent_docs._MARKER) == 1
+
+
 def test_gitignore_list_is_idempotent(repo):
     agent_docs.write_agent_docs(dry_run=False, gitignore=["memory"])
     agent_docs.write_agent_docs(dry_run=False, gitignore=["memory"])
     gi = (repo / ".gitignore").read_text()
     assert gi.count(".agents/memory/") == 1
     assert gi.count(agent_docs._MARKER) == 1
+
+
+def test_gitignore_adds_new_subfolder_without_second_marker(repo):
+    agent_docs.write_agent_docs(dry_run=False, gitignore=["memory"])
+    agent_docs.write_agent_docs(dry_run=False, gitignore=["memory", "review"])
+    gi = (repo / ".gitignore").read_text()
+    assert gi.count(".agents/memory/") == 1
+    assert gi.count(".agents/review/") == 1
+    assert gi.count(agent_docs._MARKER) == 1
+
+
+@pytest.mark.parametrize("bad", ["../secrets", "/etc", "memory/../../etc", ""])
+def test_gitignore_rejects_paths_outside_store(repo, bad):
+    with pytest.raises(ValueError):
+        agent_docs.write_agent_docs(dry_run=False, gitignore=[bad])
+    # Validation happens up front: nothing is written on a bad config value.
+    assert not (repo / agent_docs.DOC_STORE).exists()
+    assert not (repo / agent_docs.GITIGNORE).exists()
 
 
 def test_empty_gitignore_list_tracks_everything(repo):

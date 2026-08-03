@@ -204,7 +204,13 @@ def init(
     typer.echo(write_instructions(stack, dry_run))
     typer.echo(write_mcp(stack, dry_run))
     cfg = config_mod.TaraConfig.load()
-    typer.echo(agent_docs_mod.write_agent_docs(dry_run, gitignore=cfg.agents.gitignore))
+    try:
+        typer.echo(
+            agent_docs_mod.write_agent_docs(dry_run, gitignore=cfg.agents.gitignore)
+        )
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
     typer.echo(config_mod.write_config(tool, stack or "python", dry_run))
 
     # Mandatory tooling for the check gate + pre-commit hook (python stack).
