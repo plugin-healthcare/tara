@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tomllib
 
-from tara.config import CONFIG, StandardsConfig, TaraConfig, write_config
+from tara.config import CONFIG, AgentsConfig, StandardsConfig, TaraConfig, write_config
 
 
 def test_write_config_creates_file(repo):
@@ -54,3 +54,40 @@ def test_standards_load_reads_config(repo):
     path.parent.mkdir(parents=True)
     path.write_text('[standards]\ndev_tools = ["ruff", "ty"]\n')
     assert StandardsConfig.load().dev_tools == ["ruff", "ty"]
+
+
+def test_agents_defaults_empty(repo):
+    cfg = TaraConfig.load()
+    assert cfg.agents.gitignore == []
+    assert AgentsConfig().gitignore == []
+
+
+def test_write_preserves_agents_gitignore(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        'tool = "copilot"\nstack = "python"\n\n[agents]\ngitignore = ["memory"]\n'
+    )
+    write_config("copilot", "python", dry_run=False)
+    assert TaraConfig.load().agents.gitignore == ["memory"]
+
+
+def test_fresh_config_documents_optional_settings(repo):
+    write_config("copilot", "python", dry_run=False)
+    text = (repo / CONFIG).read_text()
+    assert "# [agents]" in text
+    assert "gitignore" in text
+    assert "# [standards]" in text
+    assert "optional settings" in text
+
+
+def test_set_option_is_not_re_documented(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        'tool = "copilot"\nstack = "python"\n\n[agents]\ngitignore = ["memory"]\n'
+    )
+    write_config("copilot", "python", dry_run=False)
+    text = (repo / CONFIG).read_text()
+    assert "# [agents]" not in text  # already set, so not re-documented
+    assert "# [standards]" in text  # still absent, so documented

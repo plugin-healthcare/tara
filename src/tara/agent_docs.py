@@ -1,18 +1,22 @@
 """Framework-agnostic agent doc store under ``.agents/``.
 
-``tara init`` scaffolds a small, git-tracked doc store where any agent runtime
-can keep the standardized working docs it produces during the fixed flow:
+``tara init`` scaffolds a small doc store where any agent runtime can keep the
+standardized working docs it produces during the fixed flow:
 
 - ``.agents/plan/``    -- plans and execution plans
 - ``.agents/design/``  -- design docs and technical drafts
 - ``.agents/review/``  -- code and maturity reviews
 - ``.agents/memory/``  -- freeform session notes and handover scratch
 
-Docs are named ``YYYY-MM-DD-<slug>.md`` and each folder keeps an ``index.md``
+Docs are named ``YYYYMMDDHHMM_<short-descriptive-title>.md`` (no spaces) and each
+folder keeps an ``index.md``
 (one row per doc, newest first) so the next session can scan it quickly instead
-of opening every file. The store is committed by default, so it is shared team
-knowledge, not scratch: keep it curated and never write secrets or credentials
-here. Pass ``tara init --gitignore-agents`` to keep it local (git-ignored).
+of opening every file. The store is committed by default as shared team
+knowledge; set ``[agents] gitignore`` in ``.tara/config.toml`` to keep chosen
+subfolders (for example ``memory``) local. Never write secrets anywhere here.
+
+ADRs live in ``docs/decisions/`` and stories/epics in your tracker or board,
+not here; this store holds working plans, designs, reviews, and handover notes.
 
 Optimizing knowledge retention (a structured, queryable store) is deliberately
 deferred; this flat, greppable layout is the interim.
@@ -31,8 +35,9 @@ GITIGNORE = Path(".gitignore")
 # stays idempotent even if the user tweaks the surrounding comments.
 _MARKER = "# Tara: agent doc store"
 
-# Filename convention for docs in the store (date + short slug).
-FILENAME = "YYYY-MM-DD-<slug>.md"
+# Filename convention for docs in the store: timestamp to the minute (so files
+# sort by time and rarely collide across parallel sessions) + a hyphenated title.
+FILENAME = "YYYYMMDDHHMM_<short-descriptive-title>.md"
 
 # Typed folders in the store, each with a one-line purpose used to seed its index.
 FOLDERS: tuple[tuple[str, str], ...] = (
@@ -53,35 +58,33 @@ def _index(name: str, purpose: str) -> str:
     )
 
 
-def ensure_gitignored(dry_run: bool) -> str:
-    """Add (or confirm) a git-ignore block for the ``.agents/`` store (opt-in)."""
-    rel = DOC_STORE.as_posix()
+def ensure_gitignored(rel: str, dry_run: bool) -> str:
+    """Add (or confirm) a git-ignore entry for ``rel`` (a path under the store)."""
     path = repo_root() / GITIGNORE
     existing = path.read_text() if path.exists() else ""
-    if _MARKER in existing or f"{rel}/" in existing:
+    if f"{rel}/" in existing.splitlines():
         return f"  .gitignore already ignores {rel}/"
     if dry_run:
         return f"  [dry-run] {'update' if existing else 'create'} .gitignore for {rel}/"
     block = (
-        f"{_MARKER}: local working knowledge (session notes, plans, reviews),\n"
-        f"# not published artifacts. Never write secrets here.\n"
+        f"{_MARKER}: local scratch, not published artifacts. "
+        f"Never write secrets here.\n"
         f"{rel}/\n"
     )
-    text = existing
-    if text and not text.endswith("\n"):
-        text += "\n"
+    text = existing.rstrip("\n")
     if text:
-        text += "\n"
+        text += "\n\n"
     text += block
     path.write_text(text)
     return f"  {'updated' if existing else 'created'} .gitignore for {rel}/"
 
 
-def write_agent_docs(dry_run: bool, gitignore: bool = False) -> str:
+def write_agent_docs(dry_run: bool, gitignore: list[str] | None = None) -> str:
     """Scaffold the ``.agents/`` doc store: typed folders each with an index.
 
-    The store is tracked by default. Pass ``gitignore=True`` to instead add it
-    to ``.gitignore`` and keep it local.
+    The store is tracked by default. ``gitignore`` is a list of subpaths under
+    ``.agents/`` (from ``[agents] gitignore`` in ``.tara/config.toml``) to keep
+    local instead; each listed subpath is added to ``.gitignore``.
     """
     lines: list[str] = []
     for name, purpose in FOLDERS:
@@ -96,6 +99,7 @@ def write_agent_docs(dry_run: bool, gitignore: bool = False) -> str:
         if not index.exists():
             index.write_text(_index(name, purpose))
         lines.append(f"  wrote {frel}/index.md")
-    if gitignore:
-        lines.append(ensure_gitignored(dry_run))
+    for sub in gitignore or []:
+        rel = (DOC_STORE / sub).as_posix()
+        lines.append(ensure_gitignored(rel, dry_run))
     return "\n".join(lines)

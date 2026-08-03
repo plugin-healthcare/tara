@@ -84,10 +84,10 @@ The essentials:
   agents/<name>.agent.md           # custom agents
   prompts/<name>.prompt.md         # slash-command prompts
 .mcp.json                          # MCP servers (Copilot CLI "mcpServers" schema)
-.agent/                            # git-ignored working docs (agent memory)
-  memory/ planning/ reviews/       # each seeded with an index.md
+.agents/                           # tracked working docs (agent memory)
+  plan/ design/ review/ memory/    # each seeded with an index.md
 .tara/
-  config.toml                      # setup state: selected tool + stack (+ [standards] overrides)
+  config.toml                      # setup state: tool + stack (+ [standards]/[agents] options)
   skills.toml                      # skill manifest (source of truth)
   skills.lock                      # pinned commits
   checks.toml                      # optional: override the check gate

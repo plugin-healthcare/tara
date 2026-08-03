@@ -1,0 +1,12 @@
+# Tara setup state, written by `tara init`. Safe to edit by hand.
+tool = "copilot"
+stack = "python"
+
+[agents]
+gitignore = ["memory"]
+
+# --- optional settings (uncomment to enable) ---
+# [standards]  # override the opinionated tooling baseline
+# default_stack = "python"
+# pyproject_categories = ["ruff", "pytest", "ty", "uv"]
+# dev_tools = ["ruff", "ty", "pytest", "pre-commit"]

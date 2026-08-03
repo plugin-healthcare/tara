@@ -21,5 +21,5 @@ dist/
 # Reproducible vendored skills; .tara manifests remain tracked.
 .github/skills/
 
-# Tara: agent memory / handover scratch, local only
-.agent/
+# Tara: agent doc store: local scratch, not published artifacts. Never write secrets here.
+.agents/memory/

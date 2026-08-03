@@ -50,23 +50,30 @@ When blocked, say so; don't silently guess.
 
 ## Agent memory / working docs
 
-`tara init` creates a framework-agnostic `.agent/` doc store (git-ignored, local
-working knowledge) with a folder per standardized doc you produce:
+`tara init` creates a framework-agnostic `.agents/` doc store (tracked in git,
+shared working knowledge) with a folder per standardized doc you produce:
 
-- `.agent/memory/` -- freeform session notes and handover scratch.
-- `.agent/planning/` -- plans and execution plans.
-- `.agent/reviews/` -- code and maturity reviews.
+- `.agents/plan/` -- plans and execution plans.
+- `.agents/design/` -- design docs; finalized ADRs live in `docs/decisions/`.
+- `.agents/review/` -- code and maturity reviews.
+- `.agents/memory/` -- freeform session notes and handover scratch.
 
-- Name each doc `YYYY-MM-DD-<slug>.md` (date first, so a folder sorts by time).
+- Name each doc `YYYYMMDDHHMM_<short-descriptive-title>.md`: a timestamp to the
+  minute (no spaces), so files sort by time and rarely collide across sessions.
 - Keep each folder's `index.md` current: one row per doc (date, file, one-line
   summary), newest first, so the next session can scan it instead of opening
   every file.
 - At the end of each phase (refine, design, implement, review, integrate), and
-  whenever you hand work off, drop a short note in `.agent/memory/` and file any
-  plan or review under `.agent/planning/` or `.agent/reviews/`.
+  whenever you hand work off, drop a short note in `.agents/memory/` and file
+  any plan, design, or review under the matching `.agents/` folder.
 - Keep docs short and current: what was done, what's left, and any open
   decisions. Don't duplicate them into commits or the repo's real docs.
-- Never put secrets or credentials here; git-ignored is not private.
+- This store holds working plans, designs, reviews, and handover notes only.
+  ADRs belong in `docs/decisions/`; stories and epics in your tracker or board.
+- To keep a subfolder local instead of committed, list it under
+  `[agents] gitignore` in `.tara/config.toml` (for example `["memory"]`).
+- Never put secrets or credentials here; by default the store is committed
+  and shared.
 
 ## Safety: destructive operations
 
@@ -97,4 +104,4 @@ gate enforce the mechanical items; you are responsible for the rest.
 - [ ] The increment runs: an integration test plus a small runnable example demonstrate it.
 - [ ] Docs updated for the changed behaviour; changelog updated if the change is user-facing.
 - [ ] No secrets, credentials, or local config staged; the developer makes the commit.
-- [ ] Handover notes in `.agent/memory/` are current so the next session can continue.
+- [ ] Handover notes in `.agents/memory/` are current so the next session can continue.

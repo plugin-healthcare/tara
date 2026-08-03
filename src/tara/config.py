@@ -1,8 +1,10 @@
 """Tara configuration (Pydantic), persisted in ``.tara/config.toml``.
 
 ``tara init`` writes this file to record the repo's setup state: the agent tool
-it was set up for and the default stack. The optional ``[standards]`` table
-overrides the opinionated tooling baseline. The models here read it back.
+it was set up for and the default stack. Optional tables tune behavior: the
+``[standards]`` table overrides the tooling baseline, and ``[agents]`` controls
+the ``.agents/`` doc store. Freshly written configs include commented examples
+of these options so they are discoverable. The models here read the file back.
 """
 
 from __future__ import annotations
@@ -17,6 +19,21 @@ from tara.core import repo_root
 CONFIG = Path(".tara") / "config.toml"
 
 _HEADER = "# Tara setup state, written by `tara init`. Safe to edit by hand.\n"
+
+# Commented examples appended to a freshly written config so the optional knobs
+# are discoverable. Only emitted for tables the config does not already set.
+_OPTION_DOCS: dict[str, str] = {
+    "standards": (
+        "# [standards]  # override the opinionated tooling baseline\n"
+        '# default_stack = "python"\n'
+        '# pyproject_categories = ["ruff", "pytest", "ty", "uv"]\n'
+        '# dev_tools = ["ruff", "ty", "pytest", "pre-commit"]\n'
+    ),
+    "agents": (
+        "# [agents]  # keep parts of the .agents/ doc store local (untracked)\n"
+        '# gitignore = ["memory"]  # e.g. do not commit session scratch/handover\n'
+    ),
+}
 
 
 class StandardsConfig(BaseModel):
@@ -39,17 +56,28 @@ class StandardsConfig(BaseModel):
         return TaraConfig.load().standards
 
 
+class AgentsConfig(BaseModel):
+    """Controls the ``.agents/`` doc store. The store is tracked by default.
+
+    ``gitignore`` lists subpaths under ``.agents/`` to keep local (untracked),
+    for example ``["memory"]`` to avoid committing session scratch.
+    """
+
+    gitignore: list[str] = Field(default_factory=list)
+
+
 class TaraConfig(BaseModel):
     """Repo setup state recorded by ``tara init``.
 
     ``tool`` is the agent tool the repo is set up for (``copilot``, ``opencode``,
     or ``all``); ``stack`` is the default stack; ``standards`` holds optional
-    tooling overrides.
+    tooling overrides; ``agents`` tunes the ``.agents/`` doc store.
     """
 
     tool: str = "copilot"
     stack: str = "python"
     standards: StandardsConfig = Field(default_factory=StandardsConfig)
+    agents: AgentsConfig = Field(default_factory=AgentsConfig)
 
     @classmethod
     def load(cls) -> TaraConfig:
@@ -93,7 +121,11 @@ def _dump(data: dict[str, object]) -> str:
 
 
 def write_config(tool: str, stack: str, dry_run: bool) -> str:
-    """Record setup state in ``.tara/config.toml``, preserving existing overrides."""
+    """Record setup state in ``.tara/config.toml``, preserving existing overrides.
+
+    Optional tables the config does not set are appended as commented examples so
+    the available knobs stay discoverable.
+    """
     path = repo_root() / CONFIG
     existing = tomllib.loads(path.read_text()) if path.exists() else {}
     data: dict[str, object] = {"tool": tool, "stack": stack}
@@ -105,6 +137,10 @@ def write_config(tool: str, stack: str, dry_run: bool) -> str:
         verb = "update" if path.exists() else "write"
         return f"  [dry-run] {verb} {rel} (tool={tool}, stack={stack})"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_HEADER + _dump(data))
+    docs = "\n".join(doc for name, doc in _OPTION_DOCS.items() if name not in data)
+    text = _HEADER + _dump(data)
+    if docs:
+        text += "\n# --- optional settings (uncomment to enable) ---\n" + docs
+    path.write_text(text)
     verb = "updated" if existing else "wrote"
     return f"  {verb} {rel} (tool={tool}, stack={stack})"
