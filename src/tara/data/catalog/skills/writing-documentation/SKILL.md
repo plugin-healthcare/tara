@@ -16,7 +16,8 @@ obvious what. Prose style (plain, no AI tells) is in
 - Name the audience and their question: new user, integrator, maintainer, on-call.
   Put the answer to the most common one first; detail below it.
 - Document intent and usage, not the mechanics the code already shows. If a comment
-  just restates the line beneath it, delete it.
+  just restates the line beneath it, delete it. Put a comment on its own line above
+  the code it explains, never trailing it.
 - Show, don't assert: a short runnable example beats adjectives. Every feature ships
   with a way to run and verify it.
 
@@ -24,9 +25,11 @@ obvious what. Prose style (plain, no AI tells) is in
 
 - **README**: what it is in one line, a quickstart (install, run), the common tasks,
   and where to go next. An entry point, not the whole manual.
-- **Docstrings** (google style, matching the ruff baseline): every public module,
-  class, and function. State the purpose, args, returns, and raises. Keep them true
-  to the code; a wrong docstring is worse than none.
+- **Docstrings** (the convention set in `pyproject.toml`, google by default): every
+  public module, class, and function. Keep them short and to the point: the purpose,
+  the key decisions, and how it works, plus args, returns, and raises. Don't narrate
+  every internal step; defer implementation detail to a comment. Keep them true to the
+  code; a wrong docstring is worse than none.
 - **Guides and how-tos**: task-oriented, one goal each, ordered steps a reader can
   follow start to finish.
 

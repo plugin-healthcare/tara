@@ -25,18 +25,23 @@ MIN_UV = (0, 11)
 
 @dataclass
 class Check:
+    """A named check command loaded from ``checks.toml``."""
+
     name: str
     cmd: str
 
 
 @dataclass
 class CheckResult:
+    """The result of running a :class:`Check`: its command and exit code."""
+
     name: str
     cmd: str
     returncode: int
 
     @property
     def passed(self) -> bool:
+        """True when the check exited zero."""
         return self.returncode == 0
 
 

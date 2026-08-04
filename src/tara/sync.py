@@ -69,6 +69,8 @@ print(json.dumps(results))
 
 @dataclass
 class LibrarySkill:
+    """A skill discovered inside an installed package, ready to sync into the repo."""
+
     name: str
     description: str
     package: str
@@ -188,6 +190,7 @@ def _lock_path() -> Path:
 
 
 def read_lock() -> dict[str, dict]:
+    """Read the library-skills lockfile; return ``{}`` if missing or invalid."""
     path = _lock_path()
     if not path.exists():
         return {}
@@ -198,6 +201,7 @@ def read_lock() -> dict[str, dict]:
 
 
 def write_lock(lock: dict[str, dict]) -> None:
+    """Write the library-skills lockfile as sorted, indented JSON."""
     path = _lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
@@ -229,6 +233,8 @@ def _remove_skill(skill_name: str) -> None:
 
 @dataclass
 class SyncResult:
+    """Outcome of a sync: skills added, updated, removed, unchanged, skipped, warned."""
+
     added: list[str]
     updated: list[str]
     removed: list[str]

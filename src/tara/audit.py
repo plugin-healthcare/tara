@@ -90,6 +90,8 @@ _IMPERATIVE_VERBS = frozenset(
 
 @dataclass
 class Finding:
+    """A single audit result: the file, its severity level, and the message."""
+
     path: Path
     level: str
     message: str
@@ -188,6 +190,7 @@ def _has_trigger(description: str) -> bool:
 
 
 def audit_skill(path: Path) -> list[Finding]:
+    """Audit a ``SKILL.md`` file; return findings on its frontmatter and body."""
     out: list[Finding] = []
     text = path.read_text()
     fm, body = parse_frontmatter(text)
@@ -251,6 +254,7 @@ def audit_skill(path: Path) -> list[Finding]:
 
 
 def audit_agent(path: Path) -> list[Finding]:
+    """Audit an ``*.agent.md`` file; return findings on its frontmatter and body."""
     out: list[Finding] = []
     fm, body = parse_frontmatter(path.read_text())
     if not fm:
@@ -275,6 +279,7 @@ def audit_agent(path: Path) -> list[Finding]:
 
 
 def audit_instructions(path: Path) -> list[Finding]:
+    """Audit an instructions file; findings on emptiness, length, and structure."""
     out: list[Finding] = []
     text = path.read_text().strip()
     if not text:
@@ -404,6 +409,7 @@ _AUDITORS = {
 
 
 def audit_path(path: Path, kind: str | None = None) -> list[Finding]:
+    """Audit one artifact, inferring its ``kind`` from the filename when not given."""
     if kind is None:
         if path.name == "SKILL.md":
             kind = "skill"
@@ -419,6 +425,7 @@ def audit_path(path: Path, kind: str | None = None) -> list[Finding]:
 
 
 def audit_all(root: Path | None = None) -> list[Finding]:
+    """Audit every discoverable artifact and MCP config under ``root``."""
     findings: list[Finding] = []
     for path, kind in discover(root):
         findings += audit_path(path, kind)
@@ -428,4 +435,5 @@ def audit_all(root: Path | None = None) -> list[Finding]:
 
 
 def format_findings(findings: list[Finding]) -> list[str]:
+    """Render findings as indented ``[level] path: message`` lines."""
     return [f"  [{f.level}] {_rel(f.path)}: {f.message}" for f in findings]

@@ -34,6 +34,8 @@ class SkillError(RuntimeError):
 
 @dataclass
 class SkillSource:
+    """A managed skill's source: repo, subpath, optional ref, and embedding packages."""
+
     name: str
     repo: str
     path: str
@@ -82,6 +84,7 @@ def _lock_path() -> Path:
 
 
 def read_manifest() -> dict[str, SkillSource]:
+    """Read the skill manifest into a mapping of name to :class:`SkillSource`."""
     path = _manifest_path()
     if not path.exists():
         return {}
@@ -102,6 +105,7 @@ def _esc(value: str) -> str:
 
 
 def write_manifest(skills: dict[str, SkillSource]) -> None:
+    """Write the skill manifest (one ``[skills.<name>]`` table per source)."""
     lines: list[str] = []
     for name in sorted(skills):
         s = skills[name]
@@ -117,6 +121,7 @@ def write_manifest(skills: dict[str, SkillSource]) -> None:
 
 
 def read_lock() -> dict[str, dict]:
+    """Read the skill lockfile; return ``{}`` if it is absent."""
     path = _lock_path()
     if not path.exists():
         return {}
@@ -124,6 +129,7 @@ def read_lock() -> dict[str, dict]:
 
 
 def write_lock(lock: dict[str, dict]) -> None:
+    """Write the skill lockfile as sorted, indented JSON."""
     path = _lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
@@ -133,6 +139,7 @@ def write_lock(lock: dict[str, dict]) -> None:
 
 
 def resolve_index(name: str) -> SkillSource | None:
+    """Look up ``name`` in the curated skill index; return its source or ``None``."""
     index_file = data_path() / "skills" / "index.toml"
     if not index_file.exists():
         return None
@@ -214,6 +221,7 @@ def indexed_for_packages(installed: set[str]) -> list[str]:
 
 
 def resolve_set(name: str) -> SkillSet | None:
+    """Look up a skill set by name in the sets index; return it or ``None``."""
     return read_sets_index().get(name)
 
 
@@ -352,6 +360,7 @@ def add_set(name: str) -> list[tuple[SkillSource, str]]:
 
 
 def list_skills() -> list[dict]:
+    """List manifest skills with their source, pinned commit, and install state."""
     manifest = read_manifest()
     lock = read_lock()
     rows: list[dict] = []
@@ -391,6 +400,7 @@ def update(name: str | None = None) -> list[tuple[str, str, str]]:
 
 
 def remove(name: str) -> None:
+    """Remove a skill from the manifest and delete its installed files."""
     manifest = read_manifest()
     if name not in manifest:
         raise SkillError(f"'{name}' is not in the manifest")

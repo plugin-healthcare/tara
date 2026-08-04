@@ -8,6 +8,11 @@ setup, dependency hygiene, and the tooling baseline live in the
 
 - Format and lint with `ruff` (`uv run ruff check --fix && uv run ruff format`).
 - Type-hint public APIs; check with `ty` (`uv run ty check .`), never mypy.
+- Docstrings: follow the convention in `pyproject.toml` (google by default). Keep them
+  short and to the point -- purpose, key decisions, and how it works, plus
+  args/returns/raises. Defer internal detail to a comment; don't pad the docstring.
+- Comments carry the non-obvious *why*, one point each, on their own line above the
+  code, never trailing/inline.
 - Prefer `pathlib` over `os.path`. Log via `logging` (`getLogger(__name__)`), never `print()`.
 - No bare `except`; catch specific exceptions.
 - Put the exit condition in the `for`/`while`; don't steer a `while True` with scattered

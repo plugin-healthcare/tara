@@ -26,19 +26,24 @@ _VERSION_OP = re.compile(r"[<>=!~]")
 
 @dataclass
 class CategoryStatus:
+    """Status of one pyproject tool category versus the standard baseline."""
+
     name: str
     status: str  # "ok" | "missing" | "differs" | "no-pyproject"
 
 
 def standard_dir(stack: str | None) -> Path:
+    """Return the bundled standards directory for ``stack``."""
     return data_path() / "standards" / (stack or StandardsConfig.load().default_stack)
 
 
 def pyproject_tools_text(stack: str | None) -> str:
+    """Return the bundled ``pyproject-tools.toml`` text for ``stack``."""
     return (standard_dir(stack) / "pyproject-tools.toml").read_text()
 
 
 def precommit_text(stack: str | None) -> str:
+    """Return the bundled ``pre-commit-config.yaml`` text for ``stack``."""
     return (standard_dir(stack) / "pre-commit-config.yaml").read_text()
 
 

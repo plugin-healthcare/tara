@@ -21,6 +21,7 @@ class ReviewUnavailable(RuntimeError):
 
 
 def reviewer_rubric() -> str:
+    """Return the skill-reviewer agent's rubric (its markdown body)."""
     from tara.audit import parse_frontmatter
 
     agent = data_path() / "catalog" / "agents" / "skill-reviewer.agent.md"
@@ -29,6 +30,7 @@ def reviewer_rubric() -> str:
 
 
 def build_prompt(paths: list[Path]) -> str:
+    """Build a read-only review prompt: the rubric plus the files to review."""
     file_list = "\n".join(f"- {p}" for p in paths)
     return (
         f"{reviewer_rubric()}\n\n"
