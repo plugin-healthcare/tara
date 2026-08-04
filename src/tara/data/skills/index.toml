@@ -75,3 +75,9 @@ path = "skills"
 ref = "main"
 include = ["likec4-dsl"]
 description = "LikeC4 architecture-as-code DSL reference for .c4/.likec4 files."
+
+[sets.gh-stack]
+repo = "https://github.com/github/gh-stack"
+path = "skills"
+ref = "main"
+description = "GitHub's gh-stack CLI skill for creating, viewing, and managing stacked pull requests."
