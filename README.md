@@ -84,10 +84,10 @@ The essentials:
   agents/<name>.agent.md           # custom agents
   prompts/<name>.prompt.md         # slash-command prompts
 .mcp.json                          # MCP servers (Copilot CLI "mcpServers" schema)
-.agent/                            # git-ignored working docs (agent memory)
-  memory/ planning/ reviews/       # each seeded with an index.md
+.agents/                           # tracked working docs (agent memory)
+  plan/ design/ review/ memory/    # each seeded with an index.md
 .tara/
-  config.toml                      # setup state: selected tool + stack (+ [standards] overrides)
+  config.toml                      # setup state: tool + stack (+ [standards]/[agents] options)
   skills.toml                      # skill manifest (source of truth)
   skills.lock                      # pinned commits
   checks.toml                      # optional: override the check gate
@@ -141,6 +141,7 @@ The index currently ships:
 - **agent-tooling** (from [`anthropics/skills`](https://github.com/anthropics/skills)): `skill-creator` and `mcp-builder`.
 - **developing** (from [`anthropics/skills`](https://github.com/anthropics/skills)): `webapp-testing` (Playwright-driven web app testing).
 - **likec4** (from [`likec4/likec4`](https://github.com/likec4/likec4)): `likec4-dsl` reference for `.c4`/`.likec4` files.
+- **gh-stack** (from [`github/gh-stack`](https://github.com/github/gh-stack)): `gh-stack` skill for creating, viewing, and managing stacked pull requests with the `gh stack` CLI.
 
 ```bash
 tara skill add query           # one skill, from the index

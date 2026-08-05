@@ -112,10 +112,12 @@ def _write(rel: Path, text: str, dry_run: bool) -> str:
 
 
 def write_instructions(stack: str | None, dry_run: bool) -> str:
+    """Write ``.github/copilot-instructions.md`` from the assembled instructions."""
     return _write(COPILOT_INSTRUCTIONS, assemble_instructions(stack), dry_run)
 
 
 def write_mcp(stack: str | None, dry_run: bool) -> str:
+    """Write ``.mcp.json`` with the MCP servers merged for ``stack``."""
     content = json.dumps({"mcpServers": merged_servers(stack)}, indent=2) + "\n"
     return _write(MCP_CONFIG, content, dry_run)
 

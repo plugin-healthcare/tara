@@ -32,6 +32,7 @@ def render() -> str:
 
 
 def main() -> None:
+    """Render the CLI reference and write it to ``docs/cli.md``."""
     out = Path(__file__).resolve().parent.parent / "docs" / "cli.md"
     out.write_text(render())
     print(f"Wrote {out}")

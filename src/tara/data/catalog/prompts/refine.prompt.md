@@ -19,5 +19,5 @@ Refine phase of the flow. Turn a goal or feature into agile work items following
 
 Keep items short and functional. Do not start implementing here.
 
-Finally, note the hand-off in `.agent/memory/` and keep its `index.md` current so
+Finally, note the hand-off in `.agents/memory/` and keep its `index.md` current so
 the next session can continue.

@@ -20,6 +20,8 @@ GITHUB = Path(".github")
 
 @dataclass
 class CatalogItem:
+    """One offerable catalog artifact (skill, agent, prompt, instructions, or MCP)."""
+
     name: str
     kind: str  # skill | agent | prompt | instructions | mcp
     description: str
@@ -155,6 +157,7 @@ def catalog_mcp() -> list[CatalogItem]:
 
 
 def catalog(kinds: list[str]) -> dict[str, list[CatalogItem]]:
+    """Collect catalog items for each requested kind, keyed by kind."""
     out: dict[str, list[CatalogItem]] = {}
     if "skills" in kinds:
         out["skills"] = catalog_skills()

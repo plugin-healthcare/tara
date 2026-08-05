@@ -1,5 +1,4 @@
-"""Docs fallback: discover llms.txt for installed packages and wire them into
-the mcpdoc MCP server in .mcp.json.
+"""Discover ``llms.txt`` for installed packages and wire them into the docs MCP server.
 
 For each package that has no embedded skill, we query the PyPI JSON API for its
 documentation URL and probe common llms.txt locations. Found URLs are added as
@@ -89,6 +88,7 @@ def _mcp_path() -> Path:
 
 
 def read_mcp() -> dict:
+    """Read and parse ``.mcp.json``; return ``{}`` if it is missing or invalid."""
     path = _mcp_path()
     if not path.exists():
         return {}

@@ -13,8 +13,8 @@ Initial release of Tara, an agentic engineering toolkit that installs and mainta
 ### Added
 
 - `tara init` to set up a repo: writes `.github/copilot-instructions.md` and `.mcp.json`, then adds selected instructions, skills, agents, and prompts.
-- `.tara/config.toml` records the repo's setup state (the selected tool and stack) and holds optional `[standards]` tooling overrides.
-- A git-ignored `.agent/` doc store (`memory/`, `planning/`, `reviews/`), each with an `index.md`, for the standardized working docs agents produce.
+- `.tara/config.toml` records the repo's setup state (the selected tool and stack) and holds optional `[standards]` tooling overrides and `[agents]` doc-store options; fresh configs self-document these.
+- A git-tracked `.agents/` doc store (`plan/`, `design/`, `review/`, `memory/`), each with an `index.md`, for standardized working docs agents produce; set `[agents] gitignore` in `.tara/config.toml` to keep chosen subfolders local.
 - `tara add` and `tara list` to manage bundled artifacts, and `tara sync` to pull in `SKILL.md` files shipped by installed packages (library-skills convention).
 - `tara check`: a single gate running lint, format, type-check, tests, and a dependency audit, configurable per repo via `.tara/checks.toml`.
 - `tara standards`: opinionated `pyproject.toml` tool tables and a `.pre-commit-config.yaml` baseline (ruff, ty, pytest, uv).

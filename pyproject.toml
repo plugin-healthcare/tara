@@ -45,7 +45,19 @@ target-version = "py312"
 extend-exclude = [".github/skills"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "D"]
+ignore = [
+    "D203",  # incompatible with D211 (no blank line before class docstring)
+    "D213",  # incompatible with D212 (summary on the first line)
+    "E501",  # line length is handled by the formatter
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Docstrings are optional in tests: names and GIVEN/WHEN/THEN bodies document them.
+"tests/**/*.py" = ["D100", "D101", "D102", "D103", "D104"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
