@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from tara.audit import parse_frontmatter
+from tara import frontmatter
 from tara.core import repo_root
 from tara.skills import SKILLS_DIR
 
@@ -168,9 +168,9 @@ def _parse_skill(skill_md: Path) -> LibrarySkill | None:
         text = skill_md.read_text(encoding="utf-8")
     except OSError:
         return None
-    fm, _ = parse_frontmatter(text)
-    name = fm.get("name", "").strip()
-    description = fm.get("description", "").strip()
+    fm, _ = frontmatter.parse(text)
+    name = frontmatter.text_of(fm.get("name"))
+    description = frontmatter.text_of(fm.get("description"))
     if not name:
         return None
     return LibrarySkill(

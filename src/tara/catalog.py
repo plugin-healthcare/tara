@@ -12,7 +12,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from tara import skills
+from tara import frontmatter, skills
 from tara.core import add_mcp_server, data_path, repo_root
 
 GITHUB = Path(".github")
@@ -34,11 +34,10 @@ class CatalogItem:
 
 
 def _first_paragraph(text: str) -> str:
-    from tara.audit import parse_frontmatter
-
-    fm, body = parse_frontmatter(text)
-    if fm.get("description"):
-        return fm["description"]
+    fm, body = frontmatter.parse(text)
+    description = frontmatter.text_of(fm.get("description"))
+    if description:
+        return description
     for line in body.splitlines():
         line = line.strip()
         if line and not line.startswith("#"):

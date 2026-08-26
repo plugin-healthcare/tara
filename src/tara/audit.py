@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from tara import frontmatter
 from tara.core import repo_root
 
 ERROR = "error"
@@ -21,7 +22,6 @@ WARNING = "warning"
 INFO = "info"
 
 _KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-_BLOCK_SCALAR = re.compile(r"^[|>][+-]?\d*$")
 # Phrases that signal a description explains *when* to trigger the skill.
 _TRIGGER_HINTS = (
     "use when",
@@ -104,80 +104,6 @@ def _rel(path: Path) -> str:
         return str(path)
 
 
-def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
-    """Split a markdown file into (frontmatter scalars, body).
-
-    Simple top-level ``key: value`` scalars are parsed, plus YAML block scalars
-    (``key: >`` folded and ``key: |`` literal), which official skills use for
-    multi-line descriptions. That covers the frontmatter tara cares about
-    (name, description, …). Returns an empty dict if there is no ``---``
-    delimited frontmatter block.
-    """
-    if not text.startswith("---"):
-        return {}, text
-    lines = text.splitlines()
-    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
-    if end is None:
-        return {}, text
-    fm: dict[str, str] = {}
-    i = 1
-    while i < end:
-        line = lines[i]
-        if not line.strip() or line.lstrip().startswith("#"):
-            i += 1
-            continue
-        m = re.match(r"^([A-Za-z0-9_-]+)\s*:\s*(.*)$", line)
-        if not m:
-            i += 1
-            continue
-        key, value = m.group(1), m.group(2).strip()
-        if _BLOCK_SCALAR.match(value):
-            folded = value[0] == ">"
-            i += 1
-            block: list[str] = []
-            while i < end:
-                cont = lines[i]
-                if cont.strip() and not cont[:1].isspace():
-                    break  # next top-level key ends the block
-                block.append(cont.strip())
-                i += 1
-            while block and not block[0]:
-                block.pop(0)
-            while block and not block[-1]:
-                block.pop()
-            fm[key] = (" " if folded else "\n").join(block)
-            continue
-        if value == "" and i + 1 < end and lines[i + 1][:1].isspace():
-            # Empty value followed by indented lines: an implicit plain
-            # multiline scalar (folded) or a nested list/mapping we skip.
-            i += 1
-            block = []
-            is_list = False
-            while i < end:
-                cont = lines[i]
-                if cont.strip() and not cont[:1].isspace():
-                    break  # next top-level key ends the block
-                stripped = cont.strip()
-                if stripped.startswith("- ") or stripped.startswith("-"):
-                    is_list = True
-                block.append(stripped)
-                i += 1
-            while block and not block[0]:
-                block.pop(0)
-            while block and not block[-1]:
-                block.pop()
-            fm[key] = "" if is_list else " ".join(block)
-            continue
-        if (value.startswith('"') and value.endswith('"')) or (
-            value.startswith("'") and value.endswith("'")
-        ):
-            value = value[1:-1]
-        fm[key] = value
-        i += 1
-    body = "\n".join(lines[end + 1 :]).strip()
-    return fm, body
-
-
 def _has_trigger(description: str) -> bool:
     low = description.lower()
     if any(hint in low for hint in _TRIGGER_HINTS):
@@ -193,13 +119,13 @@ def audit_skill(path: Path) -> list[Finding]:
     """Audit a ``SKILL.md`` file; return findings on its frontmatter and body."""
     out: list[Finding] = []
     text = path.read_text()
-    fm, body = parse_frontmatter(text)
+    fm, body = frontmatter.parse(text)
 
     if not fm:
         out.append(Finding(path, ERROR, "missing YAML frontmatter (--- … ---)"))
         return out
 
-    name = fm.get("name")
+    name = frontmatter.text_of(fm.get("name"))
     if not name:
         out.append(Finding(path, ERROR, "frontmatter missing 'name'"))
     else:
@@ -209,7 +135,7 @@ def audit_skill(path: Path) -> list[Finding]:
         if not _KEBAB.match(name):
             out.append(Finding(path, WARNING, f"name '{name}' is not kebab-case"))
 
-    desc = fm.get("description", "")
+    desc = frontmatter.text_of(fm.get("description"))
     if not desc:
         out.append(Finding(path, ERROR, "frontmatter missing 'description'"))
     else:
@@ -256,11 +182,11 @@ def audit_skill(path: Path) -> list[Finding]:
 def audit_agent(path: Path) -> list[Finding]:
     """Audit an ``*.agent.md`` file; return findings on its frontmatter and body."""
     out: list[Finding] = []
-    fm, body = parse_frontmatter(path.read_text())
+    fm, body = frontmatter.parse(path.read_text())
     if not fm:
         out.append(Finding(path, ERROR, "missing YAML frontmatter (--- … ---)"))
         return out
-    desc = fm.get("description", "")
+    desc = frontmatter.text_of(fm.get("description"))
     if not desc:
         out.append(Finding(path, ERROR, "frontmatter missing 'description'"))
     elif not _has_trigger(desc):

@@ -1,14 +1,16 @@
-"""tara CLI — a GitHub Copilot + opencode guardrail toolkit.
+"""tara CLI — a guardrail toolkit for Copilot, opencode, and Claude Code.
 
 Installed per-repo. Every command operates on the current working directory.
-Copilot's .github/ setup is the single source of truth; opencode files are a
-generated port of it.
+Copilot's .github/ setup is the single source of truth; the files opencode and
+Claude Code read are generated from it.
 Commands:
-  init      write instructions + MCP + memory; --tool opencode|all also ports
+  init      write instructions + MCP + memory, then pick artifacts
+  sync      pull package skills, then regenerate every configured tool's files
+  tools     choose the agent tools this repo targets and generate their files
   add       pick and install more catalog artifacts (skills/agents/prompts/instructions)
-  skill     manage skills directly (add/list/update/remove)
-  agent     manage bundled agents directly (list/add)
-  opencode  port the Copilot setup into opencode files (opencode.json + .opencode/)
+  list      show what your agent will pick up in this repo
+  skill     manage skills (add/list/update/remove/sync)
+  agent     manage bundled agents (list/add)
   check     run the project's lint/format/test gate
   audit     lint guardrail artifacts (add --deep for an LLM content review)
   new       scaffold a prompt, agent, or document from a template
@@ -27,26 +29,30 @@ from tara import agent_docs as agent_docs_mod
 from tara import audit as audit_mod
 from tara import catalog as catalog_mod
 from tara import check as check_mod
+from tara import claude as claude_mod
 from tara import config as config_mod
 from tara import docs as docs_mod
+from tara import frontmatter
 from tara import opencode as opencode_mod
 from tara import review as review_mod
 from tara import skills as skills_mod
 from tara import standards as standards_mod
 from tara import sync as sync_mod
 from tara.core import (
-    ALL_TOOLS,
+    CLAUDE,
+    COPILOT,
     OPENCODE,
+    SUPPORTED_TOOLS,
     data_path,
+    normalize_tools,
     repo_root,
-    validate_tool,
     write_instructions,
     write_mcp,
 )
 
 app = typer.Typer(
     name="tara",
-    help="GitHub Copilot guardrail toolkit. Install instructions, MCP, and skills.",
+    help="Agentic engineering guardrails: instructions, MCP, skills, and a check gate.",
     no_args_is_help=True,
 )
 
@@ -55,52 +61,37 @@ DryRun = Annotated[bool, typer.Option("--dry-run", help="Preview without writing
 AllOpt = Annotated[
     bool, typer.Option("--all", help="Select every catalog item (non-interactive).")
 ]
-ToolOpt = Annotated[
-    str,
+ToolsOpt = Annotated[
+    str | None,
     typer.Option(
+        # `--tool` is the original single-tool spelling, accepted as an alias so
+        # existing scripts and CI invocations keep working.
+        "--tools",
         "--tool",
-        help="Also port to opencode: copilot (default, no port), opencode, or all.",
+        help=(
+            "Comma-separated agent tools to target "
+            f"({', '.join(SUPPORTED_TOOLS)}, or all). Copilot is always included."
+        ),
     ),
 ]
 
 MENU_KINDS = ["skills", "agents", "prompts", "instructions", "mcp"]
 
 
-@app.command()
-def sync(
-    all_: Annotated[
-        bool,
-        typer.Option(
-            "--all", help="Scan all installed packages, not just direct deps."
+SyncAllOpt = Annotated[
+    bool,
+    typer.Option("--all", help="Scan all installed packages, not just direct deps."),
+]
+SyncDocsOpt = Annotated[
+    bool,
+    typer.Option(
+        "--docs/--no-docs",
+        help=(
+            "For packages with no skill, probe PyPI for an llms.txt "
+            "and add found ones to the mcpdoc MCP server in .mcp.json."
         ),
-    ] = False,
-    docs: Annotated[
-        bool,
-        typer.Option(
-            "--docs/--no-docs",
-            help=(
-                "For packages with no skill, probe PyPI for an llms.txt "
-                "and add found ones to the mcpdoc MCP server in .mcp.json."
-            ),
-        ),
-    ] = True,
-) -> None:
-    """Sync skills (and optionally docs) from installed packages.
-
-    Phase 1 — embedded skills: copies SKILL.md files bundled inside installed
-    packages (library-skills standard) into .github/skills/.
-
-    Phase 2 — indexed skills: for installed packages with a known official skill
-    repo in Tara's index (e.g. duckdb, streamlit), fetches and installs those
-    skills automatically.
-
-    Phase 3 — docs fallback (--docs, on by default): for packages still without
-    any skill, queries PyPI for a docs URL and probes for llms.txt. Found sources
-    are wired into the mcpdoc MCP server in .mcp.json.
-
-    By default only direct dependencies from pyproject.toml are considered.
-    """
-    _run_sync(all_=all_, docs=docs)
+    ),
+]
 
 
 def _run_sync(all_: bool, docs: bool) -> None:
@@ -181,23 +172,21 @@ def _run_sync(all_: bool, docs: bool) -> None:
 @app.command()
 def init(
     stack: StackArg = "python",
-    tool: ToolOpt = "copilot",
+    tools: ToolsOpt = None,
     all_: AllOpt = False,
     dry_run: DryRun = False,
 ) -> None:
     """Set up this repo: Copilot core, MCP, agent memory, tooling, then artifacts.
 
-    Copilot's .github/ setup is always the source. ``--tool opencode`` or
-    ``--tool all`` additionally port that setup into opencode files
-    (opencode.json + .opencode/); ``--tool copilot`` (default) skips the port.
+    Copilot's .github/ setup is always the source of truth. ``--tools`` adds
+    further targets (e.g. ``--tools claude`` or ``--tools all``) whose files are
+    generated from it; change them later with ``tara tools``.
     """
     try:
-        tool = validate_tool(tool)
+        selected = normalize_tools((tools or COPILOT).split(","))
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(1) from exc
-
-    port = tool in (OPENCODE, ALL_TOOLS)
 
     typer.echo(f"Setting up Copilot for stack: {stack}")
     typer.echo("\nCore setup:")
@@ -211,17 +200,17 @@ def init(
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(1) from exc
-    typer.echo(config_mod.write_config(tool, stack or "python", dry_run))
+    typer.echo(config_mod.write_config(selected, stack or "python", dry_run))
 
     # Mandatory tooling for the check gate + pre-commit hook (python stack).
     if (stack or "python") == "python":
         _report_standards("python", write=True, dry_run=dry_run)
         _offer_dev_tools("python", dry_run=dry_run)
 
+    targets = [t for t in selected if t != COPILOT]
     if dry_run:
         typer.echo("\n[dry-run] skipping optional artifact selection")
-        if port:
-            _echo_port(dry_run=True)
+        _generate_for(targets, dry_run=True)
         return
 
     # Optional extras: pick catalog artifacts, then scan installed packages.
@@ -231,17 +220,104 @@ def init(
     ):
         _run_sync(all_=False, docs=True)
 
-    if port:
-        _echo_port(dry_run=False)
+    _generate_for(targets, dry_run=False)
 
 
-def _echo_port(dry_run: bool) -> None:
-    """Port the Copilot setup into opencode files, echoing each section."""
-    typer.echo("\nPorting Copilot setup to opencode:")
-    for title, lines in opencode_mod.port_all(dry_run):
-        typer.echo(f"{title}:")
-        for line in lines or ["  (nothing to port)"]:
-            typer.echo(line)
+# ── tools ─────────────────────────────────────────────────────────────────────
+
+# Each generated tool's display name and entry point. Copilot is absent: its
+# .github/ setup is the source these are generated from.
+_GENERATORS = {
+    OPENCODE: ("opencode", opencode_mod.port_all),
+    CLAUDE: ("Claude Code", claude_mod.port_all),
+}
+
+
+def _generate_for(targets: list[str], dry_run: bool) -> None:
+    """Generate each target tool's files from the Copilot setup, echoing sections."""
+    for target in targets:
+        label, port_all = _GENERATORS[target]
+        typer.echo(f"\nGenerating {label} files from the Copilot setup:")
+        for title, lines in port_all(dry_run):
+            typer.echo(f"{title}:")
+            for line in lines or ["  (nothing to generate)"]:
+                typer.echo(line)
+
+
+@app.command()
+def tools(
+    names: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help=(
+                "Tools to target "
+                f"({', '.join(SUPPORTED_TOOLS)}, or all). Omit to pick from a menu."
+            )
+        ),
+    ] = None,
+    list_only: Annotated[
+        bool, typer.Option("--list", help="Show the current targets and exit.")
+    ] = False,
+    dry_run: DryRun = False,
+) -> None:
+    """Choose the agent tools this repo targets, then generate their files.
+
+    Copilot is always included: its .github/ setup is the source of truth, and
+    every other tool's files are generated from it. The selection is saved to
+    .tara/config.toml, so `tara tools` with no arguments re-runs generation for
+    whatever is already configured.
+    """
+    cfg = config_mod.TaraConfig.load()
+
+    if list_only:
+        typer.echo("Target tools:")
+        for tool in SUPPORTED_TOOLS:
+            mark = "✓" if tool in cfg.tools else "—"
+            source = "  (source of truth)" if tool == COPILOT else ""
+            typer.echo(f"  {mark} {tool}{source}")
+        return
+
+    if names:
+        chosen = list(names)
+    elif sys.stdin.isatty():
+        chosen = _select_tools(cfg.tools)
+    else:
+        chosen = cfg.tools  # non-interactive: regenerate what is configured
+
+    try:
+        selected = normalize_tools(chosen)
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    if selected != cfg.tools:
+        typer.echo(config_mod.write_config(selected, cfg.stack, dry_run))
+
+    targets = [t for t in selected if t != COPILOT]
+    if not targets:
+        typer.echo("Targeting Copilot only; nothing to generate.")
+        return
+    _generate_for(targets, dry_run)
+
+
+def _select_tools(current: list[str]) -> list[str]:
+    """Prompt for target tools, pre-checking the configured ones."""
+    import questionary
+
+    picked = questionary.checkbox(
+        "Target agent tools:",
+        choices=[
+            questionary.Choice(
+                title=f"{tool}  (source of truth)" if tool == COPILOT else tool,
+                value=tool,
+                checked=tool in current,
+                disabled="always included" if tool == COPILOT else None,
+            )
+            for tool in SUPPORTED_TOOLS
+        ],
+        instruction="(↑↓ move · space toggle · enter confirm)",
+    ).unsafe_ask()
+    return picked or []
 
 
 @app.command()
@@ -310,7 +386,7 @@ def list_() -> None:
 
 
 def _frontmatter_value(path: Path, key: str) -> str | None:
-    return audit_mod.parse_frontmatter(path.read_text())[0].get(key)
+    return frontmatter.text_of(frontmatter.parse(path.read_text())[0].get(key)) or None
 
 
 def _select_and_install(kinds: list[str], select_all: bool) -> None:
@@ -366,11 +442,14 @@ def _checkbox_select(cat: dict[str, list]) -> list:
                 for it in items
             ),
         ]
+        # unsafe_ask() lets Ctrl-C raise KeyboardInterrupt (click turns it into
+        # an abort). Plain ask() returns None instead, which is indistinguishable
+        # from an empty selection and would silently advance to the next kind.
         picked = questionary.checkbox(
             f"Select {kind}:",
             choices=choices,
             instruction="(↑↓ move · space toggle · 'a' all · enter confirm)",
-        ).ask()
+        ).unsafe_ask()
         if not picked:
             continue
         if _SELECT_ALL in picked:
@@ -494,6 +573,29 @@ def skill_remove(
     typer.echo(f"Removed skill '{name}'")
 
 
+@skill_app.command("sync")
+def skill_sync(
+    all_: SyncAllOpt = False,
+    docs: SyncDocsOpt = True,
+) -> None:
+    """Sync skills (and optionally docs) from installed packages.
+
+    Phase 1 — embedded skills: copies SKILL.md files bundled inside installed
+    packages (library-skills standard) into .github/skills/.
+
+    Phase 2 — indexed skills: for installed packages with a known official skill
+    repo in Tara's index (e.g. duckdb, streamlit), fetches and installs those
+    skills automatically.
+
+    Phase 3 — docs fallback (--docs, on by default): for packages still without
+    any skill, queries PyPI for a docs URL and probes for llms.txt. Found sources
+    are wired into the mcpdoc MCP server in .mcp.json.
+
+    By default only direct dependencies from pyproject.toml are considered.
+    """
+    _run_sync(all_=all_, docs=docs)
+
+
 # ── agent ─────────────────────────────────────────────────────────────────────
 
 agent_app = typer.Typer(
@@ -532,28 +634,6 @@ def agent_add(
         )
         raise typer.Exit(1)
     typer.echo(catalog_mod.install_item(item).strip())
-
-
-# ── opencode ──────────────────────────────────────────────────────────────────
-
-opencode_app = typer.Typer(
-    help="Port the Copilot setup into opencode files (opencode.json + .opencode/).",
-    no_args_is_help=True,
-)
-app.add_typer(opencode_app, name="opencode")
-
-
-@opencode_app.command("sync")
-def opencode_sync(
-    dry_run: DryRun = False,
-) -> None:
-    """Port the Copilot .github/ setup into opencode files.
-
-    Regenerates opencode.json (referencing .github/copilot-instructions.md +
-    MCP servers from .mcp.json) and mirrors .github/ agents, prompts, and skills
-    into .opencode/. Safe to re-run; the Copilot side stays the source of truth.
-    """
-    _echo_port(dry_run=dry_run)
 
 
 # ── check ─────────────────────────────────────────────────────────────────────
@@ -870,3 +950,35 @@ def _scaffold(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content)
     typer.echo(f"Created {path.relative_to(repo_root())}")
+
+
+@app.command()
+def sync(all_: SyncAllOpt = False, docs: SyncDocsOpt = True) -> None:
+    """Bring everything up to date: package skills, then every configured tool.
+
+    Phase 1 pulls skills (and optionally docs) from installed packages, exactly
+    as `tara skill sync` does. Phase 2 regenerates the files for each tool in
+    .tara/config.toml from the Copilot setup, so newly synced skills and any
+    hand-edits under .github/ reach opencode and Claude Code too.
+    """
+    _run_sync(all_=all_, docs=docs)
+    targets = config_mod.TaraConfig.load().port_targets
+    if targets:
+        _generate_for(targets, dry_run=False)
+
+
+# Retired in favour of `tara sync` and `tara tools`, but kept hidden so existing
+# scripts keep working.
+opencode_app = typer.Typer(hidden=True, no_args_is_help=True)
+app.add_typer(opencode_app, name="opencode")
+
+
+@opencode_app.command("sync")
+def opencode_sync(dry_run: DryRun = False) -> None:
+    """Deprecated alias for `tara tools opencode`."""
+    typer.echo(
+        "note: `tara opencode sync` is now `tara tools opencode`, "
+        "or `tara sync` for every configured tool.",
+        err=True,
+    )
+    _generate_for([OPENCODE], dry_run)

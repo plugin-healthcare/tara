@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tara import core, opencode
+from tara import core, frontmatter, opencode
 
 # ── MCP schema translation ────────────────────────────────────────────────────
 
@@ -45,15 +45,28 @@ def test_to_opencode_mcp_carries_env_and_headers():
 # ── tool validation ───────────────────────────────────────────────────────────
 
 
-def test_validate_tool_accepts_known():
-    assert core.validate_tool("copilot") == "copilot"
-    assert core.validate_tool("opencode") == "opencode"
-    assert core.validate_tool("all") == "all"
+def test_normalize_tools_always_includes_copilot():
+    assert core.normalize_tools(["opencode"]) == ["copilot", "opencode"]
 
 
-def test_validate_tool_rejects_unknown():
+def test_normalize_tools_expands_all():
+    assert core.normalize_tools(["all"]) == list(core.SUPPORTED_TOOLS)
+
+
+def test_normalize_tools_dedupes_and_orders():
+    assert core.normalize_tools(["claude", "copilot", "claude"]) == [
+        "copilot",
+        "claude",
+    ]
+
+
+def test_normalize_tools_rejects_unknown():
     with pytest.raises(ValueError):
-        core.validate_tool("nope")
+        core.normalize_tools(["nope"])
+
+
+def test_port_targets_excludes_copilot():
+    assert core.port_targets(["copilot", "claude"]) == ["claude"]
 
 
 # ── agent translation ─────────────────────────────────────────────────────────
@@ -131,10 +144,9 @@ def test_translate_prompt_keeps_description_drops_agent_and_tools(tmp_path):
         "Do the fixing.\n"
     )
     result = opencode.translate_prompt(src)
-    assert 'description: "Fix lint errors."' in result
-    assert "agent:" not in result
-    assert "tools:" not in result
-    assert "Do the fixing." in result
+    fm, body = frontmatter.parse(result)
+    assert fm == {"description": "Fix lint errors."}
+    assert body == "Do the fixing."
 
 
 # ── port_config ───────────────────────────────────────────────────────────────

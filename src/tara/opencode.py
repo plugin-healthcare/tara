@@ -13,24 +13,23 @@ maintain:
 - ``.opencode/skills/``    mirrored from ``.github/skills/`` (identical SKILL.md)
 
 Everything here is generated; users edit the Copilot side (or Tara's central
-standard) and re-run ``tara opencode sync`` to regenerate.
+standard) and re-run ``tara tools`` to regenerate.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import shutil
 from pathlib import Path
 
-from tara import core
-from tara.audit import parse_frontmatter
+from tara import core, frontmatter
 from tara.core import (
     COPILOT_INSTRUCTIONS,
     OPENCODE_CONFIG,
     read_mcp_servers,
     repo_root,
 )
+from tara.frontmatter import Frontmatter
 
 # Copilot sources.
 COPILOT_AGENTS_DIR = Path(".github") / "agents"
@@ -46,23 +45,40 @@ OPENCODE_SKILLS_DIR = Path(".opencode") / "skills"
 _WRITE_TOOLS = frozenset({"write", "create", "edit", "apply_patch", "patch"})
 _BASH_TOOLS = frozenset({"bash", "shell", "terminal", "run", "execute"})
 
+
+class OpencodeAgent(Frontmatter):
+    """Frontmatter of an opencode agent (``.opencode/agents/<name>.md``).
+
+    opencode uses the singular ``permission`` key, mapping a capability to
+    ``allow`` or ``deny``.
+    """
+
+    description: str | None = None
+    mode: str = "subagent"
+    permission: dict[str, str] | None = None
+
+
+class OpencodeCommand(Frontmatter):
+    """Frontmatter of an opencode command (``.opencode/commands/<name>.md``)."""
+
+    description: str | None = None
+
+
 # Starter commands, written only when the Copilot prompts didn't already
 # produce a command of the same name and the file doesn't already exist.
-_STARTER_COMMANDS: dict[str, str] = {
+_STARTER_COMMANDS: dict[str, tuple[OpencodeCommand, str]] = {
     "check.md": (
-        "---\n"
-        "description: Run the lint and test gate (ruff + pytest)\n"
-        "---\n\n"
+        OpencodeCommand(description="Run the lint and test gate (ruff + pytest)"),
         "Run the project check gate and report any failures:\n\n"
-        "!`uv run ruff check --fix && uv run ruff format && uv run pytest`\n"
+        "!`uv run ruff check --fix && uv run ruff format && uv run pytest`",
     ),
     "review.md": (
-        "---\n"
-        "description: Review staged changes for quality and correctness\n"
-        "---\n\n"
+        OpencodeCommand(
+            description="Review staged changes for quality and correctness"
+        ),
         "@gilfoyle Review these staged changes for quality, correctness, and"
         " performance issues:\n\n"
-        "!`git diff --staged`\n"
+        "!`git diff --staged`",
     ),
 }
 
@@ -80,47 +96,28 @@ def _write_text(dest: Path, text: str, dry_run: bool) -> str:
 # ── Frontmatter translation ───────────────────────────────────────────────────
 
 
-def _quote(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
+def _agent_permission(copilot_tools: object) -> dict[str, str] | None:
+    """Deny each capability the Copilot tool list does not grant.
 
-
-def _parse_tools(raw: str) -> list[str]:
-    """Parse a YAML inline list or space/comma-separated string into tool names."""
-    raw = raw.strip().removeprefix("[").removesuffix("]")
-    return [
-        t.strip().strip("'\"").lower() for t in re.split(r"[,\s]+", raw) if t.strip()
-    ]
-
-
-def _agent_frontmatter(copilot_fm: dict[str, str]) -> str:
-    """Return the opencode agent YAML frontmatter body (without the ``---`` fences).
-
-    opencode uses the singular ``permission`` key; each capability the Copilot
-    tool list lacks is denied.
+    Returns ``None`` when nothing is denied, so the key is omitted entirely.
     """
-    lines: list[str] = []
-    description = copilot_fm.get("description", "").strip()
-    if description:
-        lines.append(f"description: {_quote(description)}")
-    lines.append("mode: subagent")
-
-    tools = _parse_tools(copilot_fm.get("tools", ""))
-    deny: list[str] = []
-    if not any(t in _WRITE_TOOLS for t in tools):
-        deny.append("edit: deny")
-    if not any(t in _BASH_TOOLS for t in tools):
-        deny.append("bash: deny")
-    if deny:
-        lines.append("permission:")
-        lines.extend(f"  {d}" for d in deny)
-    return "\n".join(lines)
+    tools = frontmatter.tokens(copilot_tools)
+    deny = {
+        capability: "deny"
+        for capability, granting in (("edit", _WRITE_TOOLS), ("bash", _BASH_TOOLS))
+        if not any(t in granting for t in tools)
+    }
+    return deny or None
 
 
 def translate_agent(source: Path) -> str:
     """Translate a Copilot ``.agent.md`` file into opencode agent markdown."""
-    fm, body = parse_frontmatter(source.read_text())
-    return f"---\n{_agent_frontmatter(fm)}\n---\n\n{body}\n"
+    fm, body = frontmatter.parse(source.read_text())
+    agent = OpencodeAgent(
+        description=frontmatter.text_of(fm.get("description")) or None,
+        permission=_agent_permission(fm.get("tools")),
+    )
+    return agent.render(body)
 
 
 def translate_prompt(source: Path) -> str:
@@ -129,11 +126,11 @@ def translate_prompt(source: Path) -> str:
     Keeps the ``description`` and body; drops Copilot-only frontmatter
     (``agent``/``tools``) that opencode commands don't use.
     """
-    fm, body = parse_frontmatter(source.read_text())
-    description = fm.get("description", "").strip()
-    if description:
-        return f"---\ndescription: {_quote(description)}\n---\n\n{body}\n"
-    return f"{body}\n"
+    fm, body = frontmatter.parse(source.read_text())
+    description = frontmatter.text_of(fm.get("description"))
+    if not description:
+        return f"{body.strip()}\n"
+    return OpencodeCommand(description=description).render(body)
 
 
 def opencode_agent_name(filename: str) -> str:
@@ -195,11 +192,11 @@ def port_commands(dry_run: bool = False) -> list[str]:
             produced.add(dest.name)
             lines.append(_write_text(dest, translate_prompt(src), dry_run))
 
-    for filename, content in _STARTER_COMMANDS.items():
+    for filename, (command, body) in _STARTER_COMMANDS.items():
         dest = root / OPENCODE_COMMANDS_DIR / filename
         if filename in produced or dest.exists():
             continue
-        lines.append(_write_text(dest, content, dry_run))
+        lines.append(_write_text(dest, command.render(body), dry_run))
     return lines
 
 

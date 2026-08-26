@@ -12,21 +12,21 @@ def test_write_config_creates_file(repo):
     path = repo / CONFIG
     assert path.exists()
     data = tomllib.loads(path.read_text())
-    assert data["tool"] == "copilot"
+    assert data["tools"] == ["copilot"]
     assert data["stack"] == "python"
     assert "wrote" in msg
 
 
 def test_load_round_trips_setup_state(repo):
-    write_config("opencode", "python", dry_run=False)
+    write_config(["opencode"], "python", dry_run=False)
     cfg = TaraConfig.load()
-    assert cfg.tool == "opencode"
+    assert cfg.tools == ["copilot", "opencode"]
     assert cfg.stack == "python"
 
 
 def test_load_defaults_when_absent(repo):
     cfg = TaraConfig.load()
-    assert cfg.tool == "copilot"
+    assert cfg.tools == ["copilot"]
     assert cfg.stack == "python"
     assert cfg.standards.dev_tools == StandardsConfig().dev_tools
 
@@ -40,7 +40,7 @@ def test_write_preserves_standards_overrides(repo):
     msg = write_config("opencode", "python", dry_run=False)
     assert "updated" in msg
     assert StandardsConfig.load().dev_tools == ["ruff"]
-    assert TaraConfig.load().tool == "opencode"
+    assert TaraConfig.load().tools == ["copilot", "opencode"]
 
 
 def test_dry_run_does_not_write(repo):
@@ -91,3 +91,32 @@ def test_set_option_is_not_re_documented(repo):
     text = (repo / CONFIG).read_text()
     assert "# [agents]" not in text  # already set, so not re-documented
     assert "# [standards]" in text  # still absent, so documented
+
+
+def test_load_migrates_legacy_tool_scalar(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text('tool = "opencode"\nstack = "python"\n')
+    assert TaraConfig.load().tools == ["copilot", "opencode"]
+
+
+def test_load_migrates_legacy_all(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text('tool = "all"\nstack = "python"\n')
+    assert TaraConfig.load().tools == ["copilot", "opencode", "claude"]
+
+
+def test_write_drops_legacy_tool_key(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text('tool = "opencode"\nstack = "python"\n')
+    write_config(["claude"], "python", dry_run=False)
+    data = tomllib.loads(path.read_text())
+    assert "tool" not in data
+    assert data["tools"] == ["copilot", "claude"]
+
+
+def test_port_targets_excludes_copilot(repo):
+    write_config(["claude"], "python", dry_run=False)
+    assert TaraConfig.load().port_targets == ["claude"]

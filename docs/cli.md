@@ -3,7 +3,7 @@
 
 # `tara`
 
-GitHub Copilot guardrail toolkit. Install instructions, MCP, and skills.
+Agentic engineering guardrails: instructions, MCP, skills, and a check gate.
 
 **Usage**:
 
@@ -19,54 +19,26 @@ $ tara [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-* `sync`: Sync skills (and optionally docs) from...
 * `init`: Set up this repo: Copilot core, MCP, agent...
+* `tools`: Choose the agent tools this repo targets,...
 * `add`: Pick and install catalog artifacts...
 * `list`: Show the Copilot triggers active in this...
 * `check`: Run the project's lint/format/test gate.
 * `standards`: Report how this repo's tooling differs...
 * `audit`: Lint Copilot guardrail artifacts (skills,...
 * `new`: Scaffold a prompt, agent, or document from...
+* `sync`: Bring everything up to date: package...
 * `skill`: Manage Copilot skills (.github/skills/).
 * `agent`: Manage Copilot agents (.github/agents/).
-* `opencode`: Port the Copilot setup into opencode files...
-
-## `tara sync`
-
-Sync skills (and optionally docs) from installed packages.
-
-Phase 1 — embedded skills: copies SKILL.md files bundled inside installed
-packages (library-skills standard) into .github/skills/.
-
-Phase 2 — indexed skills: for installed packages with a known official skill
-repo in Tara's index (e.g. duckdb, streamlit), fetches and installs those
-skills automatically.
-
-Phase 3 — docs fallback (--docs, on by default): for packages still without
-any skill, queries PyPI for a docs URL and probes for llms.txt. Found sources
-are wired into the mcpdoc MCP server in .mcp.json.
-
-By default only direct dependencies from pyproject.toml are considered.
-
-**Usage**:
-
-```console
-$ tara sync [OPTIONS]
-```
-
-**Options**:
-
-* `--all`: Scan all installed packages, not just direct deps.
-* `--docs / --no-docs`: For packages with no skill, probe PyPI for an llms.txt and add found ones to the mcpdoc MCP server in .mcp.json.  [default: docs]
-* `--help`: Show this message and exit.
+* `opencode`
 
 ## `tara init`
 
 Set up this repo: Copilot core, MCP, agent memory, tooling, then artifacts.
 
-Copilot's .github/ setup is always the source. ``--tool opencode`` or
-``--tool all`` additionally port that setup into opencode files
-(opencode.json + .opencode/); ``--tool copilot`` (default) skips the port.
+Copilot's .github/ setup is always the source of truth. ``--tools`` adds
+further targets (e.g. ``--tools claude`` or ``--tools all``) whose files are
+generated from it; change them later with ``tara tools``.
 
 **Usage**:
 
@@ -80,8 +52,33 @@ $ tara init [OPTIONS] [STACK]
 
 **Options**:
 
-* `--tool TEXT`: Also port to opencode: copilot (default, no port), opencode, or all.  [default: copilot]
+* `--tools, --tool TEXT`: Comma-separated agent tools to target (copilot, opencode, claude, or all). Copilot is always included.
 * `--all`: Select every catalog item (non-interactive).
+* `--dry-run`: Preview without writing.
+* `--help`: Show this message and exit.
+
+## `tara tools`
+
+Choose the agent tools this repo targets, then generate their files.
+
+Copilot is always included: its .github/ setup is the source of truth, and
+every other tool's files are generated from it. The selection is saved to
+.tara/config.toml, so `tara tools` with no arguments re-runs generation for
+whatever is already configured.
+
+**Usage**:
+
+```console
+$ tara tools [OPTIONS] [NAMES]...
+```
+
+**Arguments**:
+
+* `[NAMES]...`: Tools to target (copilot, opencode, claude, or all). Omit to pick from a menu.
+
+**Options**:
+
+* `--list`: Show the current targets and exit.
 * `--dry-run`: Preview without writing.
 * `--help`: Show this message and exit.
 
@@ -197,6 +194,27 @@ $ tara new [OPTIONS] [KIND] [NAME]
 
 * `--help`: Show this message and exit.
 
+## `tara sync`
+
+Bring everything up to date: package skills, then every configured tool.
+
+Phase 1 pulls skills (and optionally docs) from installed packages, exactly
+as `tara skill sync` does. Phase 2 regenerates the files for each tool in
+.tara/config.toml from the Copilot setup, so newly synced skills and any
+hand-edits under .github/ reach opencode and Claude Code too.
+
+**Usage**:
+
+```console
+$ tara sync [OPTIONS]
+```
+
+**Options**:
+
+* `--all`: Scan all installed packages, not just direct deps.
+* `--docs / --no-docs`: For packages with no skill, probe PyPI for an llms.txt and add found ones to the mcpdoc MCP server in .mcp.json.  [default: docs]
+* `--help`: Show this message and exit.
+
 ## `tara skill`
 
 Manage Copilot skills (.github/skills/).
@@ -217,6 +235,7 @@ $ tara skill [OPTIONS] COMMAND [ARGS]...
 * `list`: List installed skills, or with --all, the...
 * `update`: Re-fetch one or all skills to their latest...
 * `remove`: Remove a skill from disk and the manifest.
+* `sync`: Sync skills (and optionally docs) from...
 
 ### `tara skill add`
 
@@ -290,6 +309,35 @@ $ tara skill remove [OPTIONS] NAME
 
 * `--help`: Show this message and exit.
 
+### `tara skill sync`
+
+Sync skills (and optionally docs) from installed packages.
+
+Phase 1 — embedded skills: copies SKILL.md files bundled inside installed
+packages (library-skills standard) into .github/skills/.
+
+Phase 2 — indexed skills: for installed packages with a known official skill
+repo in Tara's index (e.g. duckdb, streamlit), fetches and installs those
+skills automatically.
+
+Phase 3 — docs fallback (--docs, on by default): for packages still without
+any skill, queries PyPI for a docs URL and probes for llms.txt. Found sources
+are wired into the mcpdoc MCP server in .mcp.json.
+
+By default only direct dependencies from pyproject.toml are considered.
+
+**Usage**:
+
+```console
+$ tara skill sync [OPTIONS]
+```
+
+**Options**:
+
+* `--all`: Scan all installed packages, not just direct deps.
+* `--docs / --no-docs`: For packages with no skill, probe PyPI for an llms.txt and add found ones to the mcpdoc MCP server in .mcp.json.  [default: docs]
+* `--help`: Show this message and exit.
+
 ## `tara agent`
 
 Manage Copilot agents (.github/agents/).
@@ -343,8 +391,6 @@ $ tara agent add [OPTIONS] NAME
 
 ## `tara opencode`
 
-Port the Copilot setup into opencode files (opencode.json + .opencode/).
-
 **Usage**:
 
 ```console
@@ -357,15 +403,11 @@ $ tara opencode [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-* `sync`: Port the Copilot .github/ setup into...
+* `sync`: Deprecated alias for `tara tools opencode`.
 
 ### `tara opencode sync`
 
-Port the Copilot .github/ setup into opencode files.
-
-Regenerates opencode.json (referencing .github/copilot-instructions.md +
-MCP servers from .mcp.json) and mirrors .github/ agents, prompts, and skills
-into .opencode/. Safe to re-run; the Copilot side stays the source of truth.
+Deprecated alias for `tara tools opencode`.
 
 **Usage**:
 

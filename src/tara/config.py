@@ -12,9 +12,9 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from tara.core import repo_root
+from tara.core import COPILOT, normalize_tools, repo_root
 
 CONFIG = Path(".tara") / "config.toml"
 
@@ -69,15 +69,26 @@ class AgentsConfig(BaseModel):
 class TaraConfig(BaseModel):
     """Repo setup state recorded by ``tara init``.
 
-    ``tool`` is the agent tool the repo is set up for (``copilot``, ``opencode``,
-    or ``all``); ``stack`` is the default stack; ``standards`` holds optional
-    tooling overrides; ``agents`` tunes the ``.agents/`` doc store.
+    ``tools`` lists the agent tools this repo targets; Copilot is always present
+    because every other tool's files are generated from its ``.github/`` setup.
+    ``stack`` is the default stack; ``standards`` holds optional tooling
+    overrides; ``agents`` tunes the ``.agents/`` doc store.
     """
 
-    tool: str = "copilot"
+    tools: list[str] = Field(default_factory=lambda: [COPILOT])
     stack: str = "python"
     standards: StandardsConfig = Field(default_factory=StandardsConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
+
+    @field_validator("tools", mode="before")
+    @classmethod
+    def _normalize(cls, value: object) -> list[str]:
+        """Accept a list, a single name, or the legacy ``all`` shorthand."""
+        if isinstance(value, str):
+            value = [value]
+        if not isinstance(value, list):
+            return [COPILOT]
+        return normalize_tools(str(v) for v in value)
 
     @classmethod
     def load(cls) -> TaraConfig:
@@ -85,7 +96,16 @@ class TaraConfig(BaseModel):
         path = repo_root() / CONFIG
         if not path.exists():
             return cls()
-        return cls.model_validate(tomllib.loads(path.read_text()))
+        raw = tomllib.loads(path.read_text())
+        # Configs written before multi-tool support used a `tool` scalar.
+        if "tools" not in raw and "tool" in raw:
+            raw["tools"] = raw.pop("tool")
+        return cls.model_validate(raw)
+
+    @property
+    def port_targets(self) -> list[str]:
+        """Configured tools whose files are generated from the Copilot setup."""
+        return [tool for tool in self.tools if tool != COPILOT]
 
 
 def _esc(value: str) -> str:
@@ -120,7 +140,7 @@ def _dump(data: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_config(tool: str, stack: str, dry_run: bool) -> str:
+def write_config(tools: list[str] | str, stack: str, dry_run: bool) -> str:
     """Record setup state in ``.tara/config.toml``, preserving existing overrides.
 
     Optional tables the config does not set are appended as commented examples so
@@ -128,14 +148,17 @@ def write_config(tool: str, stack: str, dry_run: bool) -> str:
     """
     path = repo_root() / CONFIG
     existing = tomllib.loads(path.read_text()) if path.exists() else {}
-    data: dict[str, object] = {"tool": tool, "stack": stack}
+    selected = normalize_tools(tools)
+    data: dict[str, object] = {"tools": selected, "stack": stack}
     for key, value in existing.items():
-        if key not in ("tool", "stack"):
+        # `tool` is the pre-multi-tool spelling of `tools`; drop it on rewrite.
+        if key not in ("tool", "tools", "stack"):
             data[key] = value
     rel = CONFIG.as_posix()
+    listed = ", ".join(selected)
     if dry_run:
         verb = "update" if path.exists() else "write"
-        return f"  [dry-run] {verb} {rel} (tool={tool}, stack={stack})"
+        return f"  [dry-run] {verb} {rel} (tools={listed}, stack={stack})"
     path.parent.mkdir(parents=True, exist_ok=True)
     docs = "\n".join(doc for name, doc in _OPTION_DOCS.items() if name not in data)
     text = _HEADER + _dump(data)
@@ -143,4 +166,4 @@ def write_config(tool: str, stack: str, dry_run: bool) -> str:
         text += "\n# --- optional settings (uncomment to enable) ---\n" + docs
     path.write_text(text)
     verb = "updated" if existing else "wrote"
-    return f"  {verb} {rel} (tool={tool}, stack={stack})"
+    return f"  {verb} {rel} (tools={listed}, stack={stack})"
