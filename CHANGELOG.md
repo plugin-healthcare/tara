@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-26
+
 ### Added
 
 - Claude Code as a target tool: `CLAUDE.md` (a thin `@import` pointer to the Copilot instructions), plus `.claude/agents/`, `.claude/commands/`, and `.claude/skills/` generated from the `.github/` setup. `.mcp.json` is read by Claude Code natively, so it needs no translation.
@@ -20,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `.tara/config.toml` records a `tools` list instead of a single `tool`. Existing configs are migrated on read.
 - `all` means every supported tool, so it now includes Claude Code. Repos configured with `tool = "all"` under 1.0.0 will have `CLAUDE.md` and `.claude/` generated on their next `tara sync`. Set `tools = ["copilot", "opencode"]` to keep the previous set.
 - Frontmatter is parsed and written with PyYAML instead of a hand-rolled parser, so typed values (e.g. `tools: [read, search]`) survive round-tripping.
+- The bundled base instructions gain branch naming (`<type>/<short-description>`), commit message format (imperative, 72-character subject), flaky-test guidance, and prose rules on full sentences and one-sentence-per-line wrapping.
 
 ### Deprecated
 
