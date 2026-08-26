@@ -152,4 +152,4 @@ def test_render_emits_valid_yaml_for_unicode():
 
 def test_model_rejects_unknown_keys():
     with pytest.raises(ValidationError):
-        _Sample(name="demo", bogus="nope")
+        _Sample.model_validate({"name": "demo", "bogus": "nope"})

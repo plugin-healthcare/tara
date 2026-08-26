@@ -87,11 +87,12 @@ class ClaudeCommand(Frontmatter):
     """Frontmatter of a Claude Code slash command (``.claude/commands/<name>.md``).
 
     ``allowed_tools`` is emitted as ``allowed-tools``, the key Claude Code reads
-    to permit the ``!`` bash pre-execution in a command body.
+    to permit the ``!`` bash pre-execution in a command body. The rename is a
+    serialization alias, so the field keeps its Python name on construction.
     """
 
     description: str | None = None
-    allowed_tools: str | None = Field(default=None, alias="allowed-tools")
+    allowed_tools: str | None = Field(default=None, serialization_alias="allowed-tools")
 
 
 # Starter commands, written only when the Copilot prompts didn't already
