@@ -66,8 +66,16 @@ description = "Author Agent Skills and build MCP servers."
 repo = "https://github.com/anthropics/skills"
 path = "skills"
 ref = "main"
-include = ["webapp-testing"]
-description = "Test and debug local web apps with Playwright."
+include = ["webapp-testing", "frontend-design"]
+description = "Build and test web apps: Playwright-driven testing plus frontend design guidance."
+
+[sets.claude-api]
+repo = "https://github.com/anthropics/skills"
+path = "skills"
+ref = "main"
+include = ["claude-api"]
+description = "Build on the Claude API: model ids, params, streaming, tool use, caching, token counting."
+packages = ["anthropic"]
 
 [sets.likec4]
 repo = "https://github.com/likec4/likec4"

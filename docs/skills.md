@@ -29,7 +29,8 @@ tara skill remove <name>   # delete from disk and the manifest
 - `streamlit` (from [streamlit/agent-skills](https://github.com/streamlit/agent-skills)): building, styling, and deploying Streamlit apps.
 - `dagster` (from [dagster-io/skills](https://github.com/dagster-io/skills)): `dagster-expert` (Dagster and the `dg` CLI) and `dignified-python` (opinionated production Python standards).
 - `agent-tooling` (from [anthropics/skills](https://github.com/anthropics/skills)): `skill-creator` and `mcp-builder`.
-- `developing` (from [anthropics/skills](https://github.com/anthropics/skills)): `webapp-testing` (Playwright-driven web app testing).
+- `developing` (from [anthropics/skills](https://github.com/anthropics/skills)): `webapp-testing` (Playwright-driven web app testing) and `frontend-design` (frontend design guidance).
+- `claude-api` (from [anthropics/skills](https://github.com/anthropics/skills)): building on the Claude API — model ids, params, streaming, tool use, caching, token counting. Indexed against the `anthropic` package, so `tara sync` picks it up automatically.
 - `likec4` (from [likec4/likec4](https://github.com/likec4/likec4)): `likec4-dsl` reference for `.c4`/`.likec4` files.
 - `gh-stack` (from [github/gh-stack](https://github.com/github/gh-stack)): `gh-stack` skill for creating, viewing, and managing stacked pull requests with the `gh stack` CLI.
 

@@ -9,6 +9,7 @@ as package data under ``tara/data`` and can be extended per-repo via optional
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from importlib import resources
 from pathlib import Path
 
@@ -22,19 +23,65 @@ MCP_CONFIG = Path(".mcp.json")
 # the Copilot instruction file directly, so no duplicate AGENTS.md is written.
 OPENCODE_CONFIG = Path("opencode.json")
 
+# Claude Code output (relative to the repo being set up). CLAUDE.md is a thin
+# pointer that `@`-imports the Copilot instruction file, so there is no second
+# copy of the instructions to maintain. Claude Code reads the root .mcp.json
+# (`mcpServers` schema) natively, so MCP needs no translation.
+CLAUDE_INSTRUCTIONS = Path("CLAUDE.md")
+
 # ── Tool selection ────────────────────────────────────────────────────────────
 
+# Copilot's .github/ setup is always the source of truth, so it is always a
+# configured tool and never a port target. The others are generated from it.
 COPILOT = "copilot"
 OPENCODE = "opencode"
-ALL_TOOLS = "all"
-VALID_TOOLS = (COPILOT, OPENCODE, ALL_TOOLS)
+CLAUDE = "claude"
+SUPPORTED_INTEGRATIONS = (COPILOT, OPENCODE, CLAUDE)
+
+# Shorthand accepted on the CLI and in legacy configs, meaning every tool.
+ALL_INTEGRATIONS = "all"
 
 
-def validate_tool(tool: str) -> str:
-    """Return ``tool`` if it is a recognised ``--tool`` value, else raise ValueError."""
-    if tool not in VALID_TOOLS:
-        raise ValueError(f"unknown tool '{tool}'; choose from {', '.join(VALID_TOOLS)}")
-    return tool
+def normalize_integrations(values: Iterable[str] | str) -> list[str]:
+    """Validate integration names into the canonical configured list.
+
+    Accepts the ``all`` shorthand, ignores case and blanks, de-duplicates, and
+    always includes Copilot, since every other tool is generated from it. A bare
+    string is treated as a single name, not as a sequence of characters.
+    Raises ValueError naming the first unrecognised tool.
+    """
+    if isinstance(values, str):
+        values = [values]
+    selected = {COPILOT}
+    for value in values:
+        name = value.strip().lower()
+        if not name:
+            continue
+        if name in {ALL_INTEGRATIONS, "*"}:
+            selected.update(SUPPORTED_INTEGRATIONS)
+            continue
+        if name not in SUPPORTED_INTEGRATIONS:
+            raise ValueError(
+                f"unknown integration '{value}'; choose from "
+                f"{', '.join((*SUPPORTED_INTEGRATIONS, ALL_INTEGRATIONS))}"
+            )
+        selected.add(name)
+    return [
+        integration for integration in SUPPORTED_INTEGRATIONS if integration in selected
+    ]
+
+
+def port_targets(integrations: Iterable[str]) -> list[str]:
+    """Configured integrations whose files Tara generates."""
+    return [
+        integration
+        for integration in normalize_integrations(integrations)
+        if integration != COPILOT
+    ]
+
+
+# ── Frontmatter helpers (shared by the ports) ─────────────────────────────────
+# See :mod:`tara.frontmatter` for reading and writing agent-file frontmatter.
 
 
 def data_path() -> Path:

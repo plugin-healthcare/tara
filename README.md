@@ -4,7 +4,7 @@
 
 Tara is an agentic engineering toolkit that guides both agents and developers to follow devops and coding best practices.
 It is a small Python CLI you install in a repo to set up your coding agent the way you would: it writes the instruction and MCP files the agent reads, fetches and updates reusable skills, scaffolds prompts and agents, and runs a check gate that lints, type-checks, and tests the way you would by hand.
-Tara is Python and uv focused and Copilot-first, with opencode supported and framework-agnostic tools for planning and reviewing.
+Tara is Python and uv focused and Copilot-first, with opencode and Claude Code supported through generated files, and framework-agnostic tools for planning and reviewing.
 
 ## Why use it
 
@@ -26,7 +26,8 @@ There is a clean split between the two halves of the workflow:
   It writes files into your repo, fetches skills from git, audits those files for best practices, and runs your lint/format/test gate.
   It does not talk to a model at runtime (except `audit --deep`, which shells out to the Copilot CLI for an optional content review).
 - **Your coding agent does the runtime work.**
-  Copilot is the primary target: it reads the files Tara writes (`.github/copilot-instructions.md`, `.github/skills/`, `.github/agents/`, `.github/prompts/`, `.mcp.json`) while you code, and opencode is supported through a generated port.
+  Copilot is the primary target: it reads the files Tara writes (`.github/copilot-instructions.md`, `.github/skills/`, `.github/agents/`, `.github/prompts/`, `.mcp.json`) while you code.
+  opencode and Claude Code are supported too; their files are generated from that same `.github/` setup, so there is only ever one copy to maintain.
   Tara never replaces the agent; it gets the guardrails in place and keeps them healthy.
 
 In short: **Tara installs and maintains the guardrails; your agent uses them.**
@@ -67,9 +68,9 @@ Once the files are in place, see [`docs/using-in-copilot.md`](docs/using-in-copi
 Full reference (every command, flag, and argument) is auto-generated in [`docs/cli.md`](docs/cli.md); refresh it with `uv run python scripts/gen_cli_docs.py`.
 The essentials:
 
-- **Setup:** `tara init` (write instructions + `.mcp.json`, pick artifacts), `tara add` (re-open the picker), `tara sync` (pull skills/docs from installed packages).
+- **Setup:** `tara init` (write instructions + `.mcp.json`, pick artifacts), `tara add` (re-open the picker), `tara integrations` (choose which coding-agent products Tara targets), `tara sync` (pull skills/docs from installed packages, then regenerate every configured integration).
 - **Inspect:** `tara list` (what your agent will pick up).
-- **Skills & agents:** `tara skill add|list|update|remove`, `tara agent list|add`.
+- **Skills & agents:** `tara skill add|list|update|remove|sync`, `tara agent list|add`.
 - **Quality gate:** `tara check` (ruff, `ty`, pytest, `uv audit`), `tara standards` (compare tooling to the opinionated baseline), `tara audit` (lint guardrail artifacts).
 - **Scaffold:** `tara new [kind] [name]` (prompt, agent, or a document such as `adr`, `runbook`, `changelog`, `ci`).
   Run `tara new` to list kinds.
@@ -87,7 +88,7 @@ The essentials:
 .agents/                           # tracked working docs (agent memory)
   plan/ design/ review/ memory/    # each seeded with an index.md
 .tara/
-  config.toml                      # setup state: tool + stack (+ [standards]/[agents] options)
+  config.toml                      # setup state: tools + stack (+ [standards]/[agents] options)
   skills.toml                      # skill manifest (source of truth)
   skills.lock                      # pinned commits
   checks.toml                      # optional: override the check gate
@@ -95,28 +96,53 @@ The essentials:
   mcp.local.json                   # optional: merged into .mcp.json
 ```
 
-## opencode
+## Targeting other agent tools
 
 Copilot's `.github/` setup is the single source of truth.
-opencode files are a generated **port** of it, so there's only ever one copy to maintain:
+The files opencode and Claude Code read are **generated** from it, so there is only ever one copy to maintain:
 
 ```bash
-tara init --tool opencode   # set up Copilot, then port it to opencode
-tara init --tool all        # same as --tool opencode
-tara opencode sync          # re-port after changing .github/ (run anytime)
+tara init --integrations claude          # add Claude Code
+tara init --integrations claude,opencode # add both
+tara init --integrations all             # add every supported integration
+tara integrations                        # change integrations later
+tara integrations --list                 # show current integrations
+tara sync                         # regenerate every configured tool (run anytime)
 ```
 
-The port writes (all derived, never hand-edited):
+The selection is saved as an explicit `integrations` list in `.tara/config.toml`, so adding a future integration never changes an existing repository implicitly. Legacy `tool`, `tools`, `--tool`, `--tools`, and `tara tools` inputs remain supported for compatibility.
+Copilot is always included, since everything else is derived from it.
+
+**opencode** gets (all derived from the Copilot setup):
 
 ```
-opencode.json          # references .github/copilot-instructions.md + MCP servers
-.opencode/agents/*.md   # translated from .github/agents/*.agent.md
-.opencode/commands/*.md # translated from .github/prompts/**/*.prompt.md
+opencode.json            # references .github/copilot-instructions.md + MCP servers
+.opencode/agents/*.md    # translated from .github/agents/*.agent.md
+.opencode/commands/*.md  # translated from .github/prompts/**/*.prompt.md
 .opencode/skills/<name>/ # mirrored from .github/skills/<name>/
 ```
 
-Edit the Copilot side (or Tara's bundled standard) and re-run `tara opencode sync`.
-The default `tara init` (`--tool copilot`) skips the port entirely.
+**Claude Code** gets:
+
+```
+CLAUDE.md                # a pointer that @-imports .github/copilot-instructions.md
+.claude/agents/*.md      # subagents translated from .github/agents/*.agent.md
+.claude/commands/*.md    # slash commands from .github/prompts/**/*.prompt.md
+.claude/skills/<name>/   # mirrored from .github/skills/<name>/
+```
+
+Claude Code reads the repo-root `.mcp.json` natively, so MCP needs no translation.
+Prompt nesting is preserved: `.github/prompts/python/add-types.prompt.md` becomes the `/python:add-types` command.
+
+Tara complements your setup; it never silently overwrites it.
+Every generated file carries a marker, and mirrored skills are recorded in `.tara/generated.json`.
+Anything without that provenance — a hand-written `CLAUDE.md`, your own `.opencode/skills/<name>/`, an agent you wrote yourself — is left untouched by default.
+Interactive runs show a unified diff and ask before replacement; non-interactive runs require an explicit `--force`.
+`opencode.json` is updated in place: Tara manages `$schema`, `instructions`, and `mcp`, and leaves your other settings alone.
+Malformed JSON is reported and preserved byte-for-byte.
+
+Edit the Copilot side (or Tara's bundled standard) and re-run `tara sync`.
+The default `tara init` targets Copilot only and generates nothing extra.
 
 ## MCP setup
 

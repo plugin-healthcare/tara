@@ -8,10 +8,15 @@ plan, code, build, test, and release phases.
 - **Never commit code.** The developer always reviews and commits. Stage or edit
   files, draft commit messages, and open pull requests, but do not run `git commit`
   or `git push`. This follows the Linux Foundation agentic coding guidelines.
+- Work on a `<type>/<short-description>` branch (for example `feat/add-auth` or
+  `fix/null-pointer`). Draft commit messages in the imperative mood with a subject of
+  72 characters or less, one logical change per commit.
 - Keep responses short and to the point. Be precise, don't flatter, and ask for
   clarification when unsure.
 - Write plainly and avoid typical AI formulation: no em dashes, emoji, hype adjectives,
-  or filler. For how to document, see the `writing-documentation` skill.
+  or filler. Write full sentences; don't collapse a sentence into a colon followed by a
+  noun-phrase fragment (`X: a direction, not a task, something that...`) instead of a
+  proper clause. For how to document, see the `writing-documentation` skill.
 - Prefer open source and open standards over proprietary, closed alternatives.
 - Prefer official documentation and code over blogs and articles.
 - Don't reinvent tools or frameworks when a good existing one fits the job.
@@ -39,7 +44,8 @@ review, release). Don't skip steps; if one genuinely doesn't apply, say why.
 4. **Implement**: the minimum code to pass, in small reviewable increments, one
    logical change at a time.
 5. **Check**: run the gate (`tara check`: lint, format, types, tests, security)
-   and fix until it is green; don't pile new work on a red gate.
+   and fix until it is green; don't pile new work on a red gate. Flag a flaky test
+   instead of re-running it until it passes by luck.
 6. **Document**: update docs/README and the runnable example for new behaviour;
    update the changelog if the change is user-facing.
 7. **Review & hand off**: verify the Definition of Done, stage changes, and draft the
