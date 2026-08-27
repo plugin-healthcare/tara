@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
 
-from tara import core, frontmatter, opencode
+from tara import core, frontmatter, generate, opencode
 
 # ── MCP schema translation ────────────────────────────────────────────────────
 
@@ -45,24 +46,24 @@ def test_to_opencode_mcp_carries_env_and_headers():
 # ── tool validation ───────────────────────────────────────────────────────────
 
 
-def test_normalize_tools_always_includes_copilot():
-    assert core.normalize_tools(["opencode"]) == ["copilot", "opencode"]
+def test_normalize_integrations_always_includes_copilot():
+    assert core.normalize_integrations(["opencode"]) == ["copilot", "opencode"]
 
 
-def test_normalize_tools_expands_all():
-    assert core.normalize_tools(["all"]) == list(core.SUPPORTED_TOOLS)
+def test_normalize_integrations_expands_all():
+    assert core.normalize_integrations(["all"]) == list(core.SUPPORTED_INTEGRATIONS)
 
 
-def test_normalize_tools_dedupes_and_orders():
-    assert core.normalize_tools(["claude", "copilot", "claude"]) == [
+def test_normalize_integrations_dedupes_and_orders():
+    assert core.normalize_integrations(["claude", "copilot", "claude"]) == [
         "copilot",
         "claude",
     ]
 
 
-def test_normalize_tools_rejects_unknown():
+def test_normalize_integrations_rejects_unknown():
     with pytest.raises(ValueError):
-        core.normalize_tools(["nope"])
+        core.normalize_integrations(["nope"])
 
 
 def test_port_targets_excludes_copilot():
@@ -124,6 +125,18 @@ def test_translate_agent_allows_bash_when_bash_tool_present(tmp_path):
     assert "bash: deny" not in result
 
 
+def test_translate_agent_denies_everything_for_an_empty_tool_list(tmp_path):
+    source = _make_agent(tmp_path, "empty", tools="")
+    fm, _ = frontmatter.parse(opencode.translate_agent(source))
+    assert fm["permission"] == {"*": "deny"}
+
+
+def test_translate_agent_expands_wildcard_to_full_access(tmp_path):
+    source = _make_agent(tmp_path, "all", tools="*")
+    fm, _ = frontmatter.parse(opencode.translate_agent(source))
+    assert "permission" not in fm
+
+
 def test_translate_agent_preserves_description_and_body(tmp_path):
     result = opencode.translate_agent(_make_agent(tmp_path, "yoda"))
     assert "The yoda agent." in result
@@ -146,7 +159,7 @@ def test_translate_prompt_keeps_description_drops_agent_and_tools(tmp_path):
     result = opencode.translate_prompt(src)
     fm, body = frontmatter.parse(result)
     assert fm == {"description": "Fix lint errors."}
-    assert body == "Do the fixing."
+    assert body.endswith("Do the fixing.")
 
 
 # ── port_config ───────────────────────────────────────────────────────────────
@@ -247,6 +260,19 @@ def test_port_commands_prompt_supersedes_starter(repo):
     assert "Review it." in review.read_text()
 
 
+def test_port_commands_keeps_starter_when_only_a_nested_prompt_shares_a_name(repo):
+    """A nested prompt lands at a different path, so it must not suppress the starter."""
+    prompts = repo / opencode.COPILOT_PROMPTS_DIR / "python"
+    prompts.mkdir(parents=True)
+    (prompts / "check.prompt.md").write_text(
+        '---\ndescription: "Python check."\n---\n\nCheck python.\n'
+    )
+    opencode.port_commands()
+    commands = repo / opencode.OPENCODE_COMMANDS_DIR
+    assert (commands / "python" / "check.md").exists()
+    assert (commands / "check.md").exists()
+
+
 def test_port_commands_skips_existing_starter(repo):
     cmd_dir = repo / opencode.OPENCODE_COMMANDS_DIR
     cmd_dir.mkdir(parents=True)
@@ -278,10 +304,21 @@ def test_port_skills_mirrors_source(repo):
     assert (repo / opencode.OPENCODE_SKILLS_DIR / "demo" / "SKILL.md").is_file()
 
 
-def test_port_skills_prunes_stale(repo):
+def test_port_skills_prunes_a_skill_it_generated(repo):
+    """A mirrored skill whose Copilot source disappeared is cleaned up."""
+    _make_skill(repo / opencode.COPILOT_SKILLS_DIR, "demo")
+    opencode.port_skills()
+    shutil.rmtree(repo / opencode.COPILOT_SKILLS_DIR / "demo")
+    opencode.port_skills()
+    assert not (repo / opencode.OPENCODE_SKILLS_DIR / "demo").exists()
+
+
+def test_port_skills_never_prunes_a_skill_it_did_not_generate(repo):
+    """A hand-written opencode skill is the developer's; Tara leaves it alone."""
+    generate.record("opencode", "skills", [])  # repo already tracked by Tara
     _make_skill(repo / opencode.OPENCODE_SKILLS_DIR, "gone")
     opencode.port_skills()
-    assert not (repo / opencode.OPENCODE_SKILLS_DIR / "gone").exists()
+    assert (repo / opencode.OPENCODE_SKILLS_DIR / "gone" / "SKILL.md").is_file()
 
 
 def test_port_skills_dry_run(repo):
@@ -298,3 +335,78 @@ def test_port_all_returns_all_sections(repo):
     sections = dict(opencode.port_all())
     assert set(sections) == {"Config", "Agents", "Commands", "Skills"}
     assert (repo / core.OPENCODE_CONFIG).is_file()
+
+
+# ── never overwriting the developer's files ───────────────────────────────────
+
+
+def test_port_config_preserves_unrelated_settings(repo):
+    config = repo / core.OPENCODE_CONFIG
+    config.write_text(json.dumps({"model": "anthropic/opus", "theme": "tokyonight"}))
+    opencode.port_config(force=True)
+    data = json.loads(config.read_text())
+    assert data["model"] == "anthropic/opus"
+    assert data["theme"] == "tokyonight"
+    assert data["$schema"] == core.OPENCODE_SCHEMA
+
+
+def test_port_config_refreshes_managed_keys_without_force(repo):
+    config = repo / core.OPENCODE_CONFIG
+    config.write_text(
+        json.dumps(
+            {
+                "$schema": core.OPENCODE_SCHEMA,
+                "instructions": ["old.md"],
+                "mcp": {},
+                "theme": "tokyonight",
+            }
+        )
+    )
+    (repo / core.COPILOT_INSTRUCTIONS).parent.mkdir(parents=True)
+    (repo / core.COPILOT_INSTRUCTIONS).write_text("instructions\n")
+
+    opencode.port_config()
+
+    data = json.loads(config.read_text())
+    assert data["instructions"] == [str(core.COPILOT_INSTRUCTIONS)]
+    assert data["theme"] == "tokyonight"
+
+
+def test_port_config_preserves_a_malformed_file(repo):
+    config = repo / core.OPENCODE_CONFIG
+    config.write_text("{ not json")
+    line = opencode.port_config()
+    assert config.read_text() == "{ not json"
+    assert "cannot safely merge" in line
+
+
+def test_port_agents_leaves_a_hand_written_agent_alone(repo):
+    generate.record("opencode", "skills", [])  # repo already tracked by Tara
+    src = repo / opencode.COPILOT_AGENTS_DIR
+    src.mkdir(parents=True)
+    (src / "yoda.agent.md").write_text('---\ndescription: "Y."\n---\n\nBody.\n')
+    dest = repo / opencode.OPENCODE_AGENTS_DIR / "yoda.md"
+    dest.parent.mkdir(parents=True)
+    dest.write_text("my own agent\n")
+    lines = opencode.port_agents()
+    assert dest.read_text() == "my own agent\n"
+    assert any("skipped" in line for line in lines)
+
+
+def test_port_agents_never_adopts_unmarked_output(repo):
+    src = repo / opencode.COPILOT_AGENTS_DIR
+    src.mkdir(parents=True)
+    (src / "yoda.agent.md").write_text('---\ndescription: "Y."\n---\n\nBody.\n')
+    dest = repo / opencode.OPENCODE_AGENTS_DIR / "yoda.md"
+    dest.parent.mkdir(parents=True)
+    dest.write_text("---\ndescription: Y.\n---\n\nOld unmarked output.\n")
+    lines = opencode.port_agents()
+    assert dest.read_text() == "---\ndescription: Y.\n---\n\nOld unmarked output.\n"
+    assert any("requires --force" in line for line in lines)
+
+
+def test_agent_permission_recognises_copilot_tool_names(tmp_path):
+    src = tmp_path / "vs.agent.md"
+    src.write_text("---\ntools: [editFiles, runCommands]\n---\n\nBody.\n")
+    fm, _ = frontmatter.parse(opencode.translate_agent(src))
+    assert "permission" not in fm

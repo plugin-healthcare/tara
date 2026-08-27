@@ -6,7 +6,7 @@ Claude Code read are generated from it.
 Commands:
   init      write instructions + MCP + memory, then pick artifacts
   sync      pull package skills, then regenerate every configured tool's files
-  tools     choose the agent tools this repo targets and generate their files
+  integrations choose the coding-agent products Tara targets and generate their files
   add       pick and install more catalog artifacts (skills/agents/prompts/instructions)
   list      show what your agent will pick up in this repo
   skill     manage skills (add/list/update/remove/sync)
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import sys
+from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Annotated
 
@@ -42,9 +43,9 @@ from tara.core import (
     CLAUDE,
     COPILOT,
     OPENCODE,
-    SUPPORTED_TOOLS,
+    SUPPORTED_INTEGRATIONS,
     data_path,
-    normalize_tools,
+    normalize_integrations,
     repo_root,
     write_instructions,
     write_mcp,
@@ -54,23 +55,69 @@ app = typer.Typer(
     name="tara",
     help="Agentic engineering guardrails: instructions, MCP, skills, and a check gate.",
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
+
+def _version_callback(value: bool) -> bool:
+    """Print Tara's installed package version and exit."""
+    if value:
+        typer.echo(f"tara {package_version('tara')}")
+        raise typer.Exit
+    return value
+
+
+@app.callback()
+def _main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            "-V",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show the version and exit.",
+        ),
+    ] = False,
+) -> None:
+    """Run Tara."""
+
+
+def _load_config() -> config_mod.TaraConfig:
+    """Load configuration for commands that consume it, reporting useful errors."""
+    try:
+        return config_mod.TaraConfig.load()
+    except config_mod.ConfigError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+
 StackArg = Annotated[str, typer.Argument(help="Stack (default: python)")]
-DryRun = Annotated[bool, typer.Option("--dry-run", help="Preview without writing.")]
-AllOpt = Annotated[
-    bool, typer.Option("--all", help="Select every catalog item (non-interactive).")
+DryRun = Annotated[
+    bool, typer.Option("--dry-run", "-n", help="Preview without writing.")
 ]
-ToolsOpt = Annotated[
+ForceOpt = Annotated[
+    bool,
+    typer.Option(
+        "--force",
+        "-f",
+        help="Allow overwriting existing files when confirmation is unavailable.",
+    ),
+]
+AllOpt = Annotated[
+    bool,
+    typer.Option("--all", "-a", help="Select every catalog item (non-interactive)."),
+]
+IntegrationsOpt = Annotated[
     str | None,
     typer.Option(
-        # `--tool` is the original single-tool spelling, accepted as an alias so
-        # existing scripts and CI invocations keep working.
+        "--integrations",
         "--tools",
         "--tool",
         help=(
-            "Comma-separated agent tools to target "
-            f"({', '.join(SUPPORTED_TOOLS)}, or all). Copilot is always included."
+            "Comma-separated products to integrate with "
+            f"({', '.join(SUPPORTED_INTEGRATIONS)}, or all). "
+            "Copilot is always included."
         ),
     ),
 ]
@@ -80,7 +127,9 @@ MENU_KINDS = ["skills", "agents", "prompts", "instructions", "mcp"]
 
 SyncAllOpt = Annotated[
     bool,
-    typer.Option("--all", help="Scan all installed packages, not just direct deps."),
+    typer.Option(
+        "--all", "-a", help="Scan all installed packages, not just direct deps."
+    ),
 ]
 SyncDocsOpt = Annotated[
     bool,
@@ -108,7 +157,11 @@ def _run_sync(all_: bool, docs: bool) -> None:
     for name in result.removed:
         typer.echo(f"  skill removed  {name}")
     for name in result.skipped:
-        typer.echo(f"  skill skipped  {name} (core-managed, not overwritten)")
+        origin = result.skipped_reasons.get(name, "already installed")
+        typer.echo(
+            f"  skill skipped  {name} ({origin}; run "
+            f"`tara skill remove {name}` to take the package's version instead)"
+        )
     for name in result.unchanged:
         typer.echo(f"  skill ok       {name}")
 
@@ -172,27 +225,28 @@ def _run_sync(all_: bool, docs: bool) -> None:
 @app.command()
 def init(
     stack: StackArg = "python",
-    tools: ToolsOpt = None,
+    integrations: IntegrationsOpt = None,
     all_: AllOpt = False,
     dry_run: DryRun = False,
+    force: ForceOpt = False,
 ) -> None:
     """Set up this repo: Copilot core, MCP, agent memory, tooling, then artifacts.
 
-    Copilot's .github/ setup is always the source of truth. ``--tools`` adds
-    further targets (e.g. ``--tools claude`` or ``--tools all``) whose files are
-    generated from it; change them later with ``tara tools``.
+    Copilot's .github/ setup is always the source of truth. ``--integrations``
+    adds products such as Claude Code and OpenCode whose files are generated
+    from it; change them later with ``tara integrations``.
     """
     try:
-        selected = normalize_tools((tools or COPILOT).split(","))
+        selected = normalize_integrations((integrations or COPILOT).split(","))
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(1) from exc
 
+    cfg = _load_config()
     typer.echo(f"Setting up Copilot for stack: {stack}")
     typer.echo("\nCore setup:")
     typer.echo(write_instructions(stack, dry_run))
     typer.echo(write_mcp(stack, dry_run))
-    cfg = config_mod.TaraConfig.load()
     try:
         typer.echo(
             agent_docs_mod.write_agent_docs(dry_run, gitignore=cfg.agents.gitignore)
@@ -210,7 +264,7 @@ def init(
     targets = [t for t in selected if t != COPILOT]
     if dry_run:
         typer.echo("\n[dry-run] skipping optional artifact selection")
-        _generate_for(targets, dry_run=True)
+        _generate_for(targets, dry_run=True, force=force)
         return
 
     # Optional extras: pick catalog artifacts, then scan installed packages.
@@ -220,92 +274,109 @@ def init(
     ):
         _run_sync(all_=False, docs=True)
 
-    _generate_for(targets, dry_run=False)
+    _generate_for(targets, dry_run=False, force=force)
 
 
-# ── tools ─────────────────────────────────────────────────────────────────────
+# ── integrations ──────────────────────────────────────────────────────────────
 
 # Each generated tool's display name and entry point. Copilot is absent: its
 # .github/ setup is the source these are generated from.
 _GENERATORS = {
-    OPENCODE: ("opencode", opencode_mod.port_all),
-    CLAUDE: ("Claude Code", claude_mod.port_all),
+    OPENCODE: ("opencode", opencode_mod.port_all, opencode_mod.remove_all),
+    CLAUDE: ("Claude Code", claude_mod.port_all, claude_mod.remove_all),
 }
 
 
-def _generate_for(targets: list[str], dry_run: bool) -> None:
+def _generate_for(targets: list[str], dry_run: bool, force: bool = False) -> None:
     """Generate each target tool's files from the Copilot setup, echoing sections."""
     for target in targets:
-        label, port_all = _GENERATORS[target]
+        label, port_all, _ = _GENERATORS[target]
         typer.echo(f"\nGenerating {label} files from the Copilot setup:")
-        for title, lines in port_all(dry_run):
+        for title, lines in port_all(dry_run, force):
             typer.echo(f"{title}:")
             for line in lines or ["  (nothing to generate)"]:
                 typer.echo(line)
 
 
-@app.command()
-def tools(
+def _remove_integrations(integrations: list[str], dry_run: bool) -> None:
+    """Remove Tara-owned files for integrations no longer configured."""
+    for integration in integrations:
+        label, _, remove_all = _GENERATORS[integration]
+        typer.echo(f"\nRemoving Tara-managed {label} files:")
+        for line in remove_all(dry_run) or ["  (nothing to remove)"]:
+            typer.echo(line)
+
+
+@app.command("tools", hidden=True, deprecated=True)
+@app.command("integrations")
+def integrations(
     names: Annotated[
         list[str] | None,
         typer.Argument(
             help=(
-                "Tools to target "
-                f"({', '.join(SUPPORTED_TOOLS)}, or all). Omit to pick from a menu."
+                "Products to integrate with "
+                f"({', '.join(SUPPORTED_INTEGRATIONS)}, or all). "
+                "Omit to pick from a menu."
             )
         ),
     ] = None,
     list_only: Annotated[
-        bool, typer.Option("--list", help="Show the current targets and exit.")
+        bool, typer.Option("--list", "-l", help="Show the current targets and exit.")
     ] = False,
     dry_run: DryRun = False,
+    force: ForceOpt = False,
 ) -> None:
-    """Choose the agent tools this repo targets, then generate their files.
+    """Choose the coding-agent products Tara integrates with.
 
     Copilot is always included: its .github/ setup is the source of truth, and
     every other tool's files are generated from it. The selection is saved to
-    .tara/config.toml, so `tara tools` with no arguments re-runs generation for
-    whatever is already configured.
+    .tara/config.toml, so `tara integrations` with no arguments regenerates the
+    configured integrations.
     """
-    cfg = config_mod.TaraConfig.load()
+    cfg = _load_config()
 
     if list_only:
-        typer.echo("Target tools:")
-        for tool in SUPPORTED_TOOLS:
-            mark = "✓" if tool in cfg.tools else "—"
-            source = "  (source of truth)" if tool == COPILOT else ""
-            typer.echo(f"  {mark} {tool}{source}")
+        typer.echo("Integrations:")
+        for integration in SUPPORTED_INTEGRATIONS:
+            mark = "✓" if integration in cfg.integrations else "—"
+            source = "  (source of truth)" if integration == COPILOT else ""
+            typer.echo(f"  {mark} {integration}{source}")
         return
 
     if names:
-        chosen = list(names)
+        # Accept both separate and comma-delimited integration names.
+        chosen = [part for name in names for part in name.split(",")]
     elif sys.stdin.isatty():
-        chosen = _select_tools(cfg.tools)
+        chosen = _select_integrations(cfg.integrations)
     else:
-        chosen = cfg.tools  # non-interactive: regenerate what is configured
+        chosen = cfg.integrations
 
     try:
-        selected = normalize_tools(chosen)
+        selected = normalize_integrations(chosen)
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(1) from exc
 
-    if selected != cfg.tools:
+    removed = [
+        integration for integration in cfg.port_targets if integration not in selected
+    ]
+    _remove_integrations(removed, dry_run)
+    if selected != cfg.integrations:
         typer.echo(config_mod.write_config(selected, cfg.stack, dry_run))
 
     targets = [t for t in selected if t != COPILOT]
     if not targets:
         typer.echo("Targeting Copilot only; nothing to generate.")
         return
-    _generate_for(targets, dry_run)
+    _generate_for(targets, dry_run, force)
 
 
-def _select_tools(current: list[str]) -> list[str]:
-    """Prompt for target tools, pre-checking the configured ones."""
+def _select_integrations(current: list[str]) -> list[str]:
+    """Prompt for integrations, pre-checking the configured ones."""
     import questionary
 
     picked = questionary.checkbox(
-        "Target agent tools:",
+        "Integrations:",
         choices=[
             questionary.Choice(
                 title=f"{tool}  (source of truth)" if tool == COPILOT else tool,
@@ -313,7 +384,7 @@ def _select_tools(current: list[str]) -> list[str]:
                 checked=tool in current,
                 disabled="always included" if tool == COPILOT else None,
             )
-            for tool in SUPPORTED_TOOLS
+            for tool in SUPPORTED_INTEGRATIONS
         ],
         instruction="(↑↓ move · space toggle · enter confirm)",
     ).unsafe_ask()
@@ -506,6 +577,7 @@ def skill_list(
         bool,
         typer.Option(
             "--all",
+            "-a",
             help="Show every indexed skill, marking installed (✓) vs available (—).",
         ),
     ] = False,
@@ -953,7 +1025,11 @@ def _scaffold(path: Path, content: str) -> None:
 
 
 @app.command()
-def sync(all_: SyncAllOpt = False, docs: SyncDocsOpt = True) -> None:
+def sync(
+    all_: SyncAllOpt = False,
+    docs: SyncDocsOpt = True,
+    force: ForceOpt = False,
+) -> None:
     """Bring everything up to date: package skills, then every configured tool.
 
     Phase 1 pulls skills (and optionally docs) from installed packages, exactly
@@ -961,24 +1037,24 @@ def sync(all_: SyncAllOpt = False, docs: SyncDocsOpt = True) -> None:
     .tara/config.toml from the Copilot setup, so newly synced skills and any
     hand-edits under .github/ reach opencode and Claude Code too.
     """
+    targets = _load_config().port_targets
     _run_sync(all_=all_, docs=docs)
-    targets = config_mod.TaraConfig.load().port_targets
     if targets:
-        _generate_for(targets, dry_run=False)
+        _generate_for(targets, dry_run=False, force=force)
 
 
-# Retired in favour of `tara sync` and `tara tools`, but kept hidden so existing
+# Retired in favour of `tara sync` and `tara integrations`, but kept hidden so existing
 # scripts keep working.
 opencode_app = typer.Typer(hidden=True, no_args_is_help=True)
 app.add_typer(opencode_app, name="opencode")
 
 
 @opencode_app.command("sync")
-def opencode_sync(dry_run: DryRun = False) -> None:
-    """Deprecated alias for `tara tools opencode`."""
+def opencode_sync(dry_run: DryRun = False, force: ForceOpt = False) -> None:
+    """Deprecated alias for `tara integrations opencode`."""
     typer.echo(
-        "note: `tara opencode sync` is now `tara tools opencode`, "
+        "note: `tara opencode sync` is now `tara integrations opencode`, "
         "or `tara sync` for every configured tool.",
         err=True,
     )
-    _generate_for([OPENCODE], dry_run)
+    _generate_for([OPENCODE], dry_run, force)

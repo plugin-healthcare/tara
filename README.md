@@ -68,7 +68,7 @@ Once the files are in place, see [`docs/using-in-copilot.md`](docs/using-in-copi
 Full reference (every command, flag, and argument) is auto-generated in [`docs/cli.md`](docs/cli.md); refresh it with `uv run python scripts/gen_cli_docs.py`.
 The essentials:
 
-- **Setup:** `tara init` (write instructions + `.mcp.json`, pick artifacts), `tara add` (re-open the picker), `tara tools` (choose which agent tools this repo targets), `tara sync` (pull skills/docs from installed packages, then regenerate every configured tool).
+- **Setup:** `tara init` (write instructions + `.mcp.json`, pick artifacts), `tara add` (re-open the picker), `tara integrations` (choose which coding-agent products Tara targets), `tara sync` (pull skills/docs from installed packages, then regenerate every configured integration).
 - **Inspect:** `tara list` (what your agent will pick up).
 - **Skills & agents:** `tara skill add|list|update|remove|sync`, `tara agent list|add`.
 - **Quality gate:** `tara check` (ruff, `ty`, pytest, `uv audit`), `tara standards` (compare tooling to the opinionated baseline), `tara audit` (lint guardrail artifacts).
@@ -102,18 +102,18 @@ Copilot's `.github/` setup is the single source of truth.
 The files opencode and Claude Code read are **generated** from it, so there is only ever one copy to maintain:
 
 ```bash
-tara init --tools claude          # set up Copilot, then generate Claude Code files
-tara init --tools claude,opencode # target both
-tara init --tools all             # target every supported tool
-tara tools                        # change the targets later (menu, or name them)
-tara tools --list                 # show the current targets
+tara init --integrations claude          # add Claude Code
+tara init --integrations claude,opencode # add both
+tara init --integrations all             # add every supported integration
+tara integrations                        # change integrations later
+tara integrations --list                 # show current integrations
 tara sync                         # regenerate every configured tool (run anytime)
 ```
 
-The selection is saved as `tools` in `.tara/config.toml`, so `tara sync` and a bare `tara tools` regenerate whatever is already configured.
+The selection is saved as an explicit `integrations` list in `.tara/config.toml`, so adding a future integration never changes an existing repository implicitly. Legacy `tool`, `tools`, `--tool`, `--tools`, and `tara tools` inputs remain supported for compatibility.
 Copilot is always included, since everything else is derived from it.
 
-**opencode** gets (all derived, never hand-edited):
+**opencode** gets (all derived from the Copilot setup):
 
 ```
 opencode.json            # references .github/copilot-instructions.md + MCP servers
@@ -133,7 +133,13 @@ CLAUDE.md                # a pointer that @-imports .github/copilot-instructions
 
 Claude Code reads the repo-root `.mcp.json` natively, so MCP needs no translation.
 Prompt nesting is preserved: `.github/prompts/python/add-types.prompt.md` becomes the `/python:add-types` command.
-A hand-written `CLAUDE.md` is never overwritten; Tara only replaces one it generated itself.
+
+Tara complements your setup; it never silently overwrites it.
+Every generated file carries a marker, and mirrored skills are recorded in `.tara/generated.json`.
+Anything without that provenance — a hand-written `CLAUDE.md`, your own `.opencode/skills/<name>/`, an agent you wrote yourself — is left untouched by default.
+Interactive runs show a unified diff and ask before replacement; non-interactive runs require an explicit `--force`.
+`opencode.json` is updated in place: Tara manages `$schema`, `instructions`, and `mcp`, and leaves your other settings alone.
+Malformed JSON is reported and preserved byte-for-byte.
 
 Edit the Copilot side (or Tara's bundled standard) and re-run `tara sync`.
 The default `tara init` targets Copilot only and generates nothing extra.

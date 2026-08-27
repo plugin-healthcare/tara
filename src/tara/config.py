@@ -12,11 +12,31 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from tara.core import COPILOT, normalize_tools, repo_root
+from tara.core import COPILOT, normalize_integrations, repo_root
 
 CONFIG = Path(".tara") / "config.toml"
+
+
+class ConfigError(Exception):
+    """``.tara/config.toml`` says something Tara cannot act on.
+
+    Raised instead of falling back to defaults: a typo in ``integrations`` must be
+    reported, not silently turned into a setup the developer did not ask for.
+    The CLI reports it as a one-line error and exits non-zero.
+    """
+
+
+def _explain(exc: ValidationError) -> str:
+    """Render a ValidationError as one readable ``key: reason`` line per problem."""
+    lines = []
+    for err in exc.errors():
+        key = ".".join(str(part) for part in err["loc"]) or "config"
+        reason = err["msg"].removeprefix("Value error, ")
+        lines.append(f"  {key}: {reason}")
+    return "\n".join(lines)
+
 
 _HEADER = "# Tara setup state, written by `tara init`. Safe to edit by hand.\n"
 
@@ -69,43 +89,64 @@ class AgentsConfig(BaseModel):
 class TaraConfig(BaseModel):
     """Repo setup state recorded by ``tara init``.
 
-    ``tools`` lists the agent tools this repo targets; Copilot is always present
+    ``integrations`` lists the coding-agent products Tara targets; Copilot is present
     because every other tool's files are generated from its ``.github/`` setup.
     ``stack`` is the default stack; ``standards`` holds optional tooling
     overrides; ``agents`` tunes the ``.agents/`` doc store.
     """
 
-    tools: list[str] = Field(default_factory=lambda: [COPILOT])
+    integrations: list[str] = Field(default_factory=lambda: [COPILOT])
     stack: str = "python"
     standards: StandardsConfig = Field(default_factory=StandardsConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
 
-    @field_validator("tools", mode="before")
+    @field_validator("integrations", mode="before")
     @classmethod
     def _normalize(cls, value: object) -> list[str]:
         """Accept a list, a single name, or the legacy ``all`` shorthand."""
         if isinstance(value, str):
             value = [value]
         if not isinstance(value, list):
-            return [COPILOT]
-        return normalize_tools(str(v) for v in value)
+            raise ValueError("integrations must be a string or list of strings")
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("integrations must contain only strings")
+        return normalize_integrations([item for item in value if isinstance(item, str)])
 
     @classmethod
     def load(cls) -> TaraConfig:
-        """Read ``.tara/config.toml``, or return defaults if it is absent."""
+        """Read ``.tara/config.toml``, or return defaults if it is absent.
+
+        Raises :class:`ConfigError` when the file exists but cannot be used, so
+        the command reports what is wrong with it rather than guessing.
+        """
         path = repo_root() / CONFIG
         if not path.exists():
             return cls()
-        raw = tomllib.loads(path.read_text())
-        # Configs written before multi-tool support used a `tool` scalar.
-        if "tools" not in raw and "tool" in raw:
-            raw["tools"] = raw.pop("tool")
-        return cls.model_validate(raw)
+        try:
+            raw = tomllib.loads(path.read_text())
+        except tomllib.TOMLDecodeError as exc:
+            raise ConfigError(f"{CONFIG} is not valid TOML: {exc}") from exc
+        except OSError as exc:
+            raise ConfigError(f"cannot read {CONFIG}: {exc}") from exc
+        if "integrations" not in raw:
+            if "tools" in raw:
+                raw["integrations"] = raw.pop("tools")
+            elif "tool" in raw:
+                legacy = raw.pop("tool")
+                raw["integrations"] = (
+                    [COPILOT, "opencode"] if legacy == "all" else legacy
+                )
+        try:
+            return cls.model_validate(raw)
+        except ValidationError as exc:
+            raise ConfigError(f"{CONFIG} is invalid:\n{_explain(exc)}") from exc
 
     @property
     def port_targets(self) -> list[str]:
-        """Configured tools whose files are generated from the Copilot setup."""
-        return [tool for tool in self.tools if tool != COPILOT]
+        """Configured integrations whose files are generated from Copilot."""
+        return [
+            integration for integration in self.integrations if integration != COPILOT
+        ]
 
 
 def _esc(value: str) -> str:
@@ -140,7 +181,7 @@ def _dump(data: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_config(tools: list[str] | str, stack: str, dry_run: bool) -> str:
+def write_config(integrations: list[str] | str, stack: str, dry_run: bool) -> str:
     """Record setup state in ``.tara/config.toml``, preserving existing overrides.
 
     Optional tables the config does not set are appended as commented examples so
@@ -148,17 +189,16 @@ def write_config(tools: list[str] | str, stack: str, dry_run: bool) -> str:
     """
     path = repo_root() / CONFIG
     existing = tomllib.loads(path.read_text()) if path.exists() else {}
-    selected = normalize_tools(tools)
-    data: dict[str, object] = {"tools": selected, "stack": stack}
+    selected = normalize_integrations(integrations)
+    data: dict[str, object] = {"integrations": selected, "stack": stack}
     for key, value in existing.items():
-        # `tool` is the pre-multi-tool spelling of `tools`; drop it on rewrite.
-        if key not in ("tool", "tools", "stack"):
+        if key not in ("tool", "tools", "integrations", "stack"):
             data[key] = value
     rel = CONFIG.as_posix()
     listed = ", ".join(selected)
     if dry_run:
         verb = "update" if path.exists() else "write"
-        return f"  [dry-run] {verb} {rel} (tools={listed}, stack={stack})"
+        return f"  [dry-run] {verb} {rel} (integrations={listed}, stack={stack})"
     path.parent.mkdir(parents=True, exist_ok=True)
     docs = "\n".join(doc for name, doc in _OPTION_DOCS.items() if name not in data)
     text = _HEADER + _dump(data)
@@ -166,4 +206,4 @@ def write_config(tools: list[str] | str, stack: str, dry_run: bool) -> str:
         text += "\n# --- optional settings (uncomment to enable) ---\n" + docs
     path.write_text(text)
     verb = "updated" if existing else "wrote"
-    return f"  {verb} {rel} (tools={listed}, stack={stack})"
+    return f"  {verb} {rel} (integrations={listed}, stack={stack})"

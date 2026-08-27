@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
-from tara import claude, core, frontmatter
+from tara import claude, core, frontmatter, generate
 
 # ── tool name mapping ─────────────────────────────────────────────────────────
 
@@ -49,8 +50,9 @@ def test_translate_agent_writes_name_description_and_tools(tmp_path):
     fm, body = frontmatter.parse(claude.translate_agent(_make_agent(tmp_path, "yoda")))
     assert fm["name"] == "yoda"
     assert fm["description"] == "The yoda agent."
-    assert fm["tools"] == "Glob, Grep, Read"
-    assert body == "Body of yoda."
+    assert fm["tools"] == ["Glob", "Grep", "Read"]
+    assert body.endswith("Body of yoda.")
+    assert generate.MARKER in body
 
 
 def test_translate_agent_drops_copilot_only_frontmatter(tmp_path):
@@ -58,12 +60,52 @@ def test_translate_agent_drops_copilot_only_frontmatter(tmp_path):
     assert "user-invocable" not in fm
 
 
-def test_translate_agent_omits_tools_when_none_map(tmp_path):
+def test_translate_agent_omits_tools_when_none_declared(tmp_path):
     """No tools key means the subagent inherits Claude Code's full toolset."""
     src = tmp_path / "open.agent.md"
     src.write_text('---\ndescription: "Open agent."\n---\n\nBody.\n')
     fm, _ = frontmatter.parse(claude.translate_agent(src))
     assert "tools" not in fm
+
+
+def test_translate_agent_falls_back_to_read_only_tools(tmp_path):
+    """An unmappable tool list must not silently inherit Bash and Write."""
+    src = tmp_path / "narrow.agent.md"
+    src.write_text('---\ndescription: "Narrow."\ntools: [nonsense]\n---\n\nBody.\n')
+    fm, _ = frontmatter.parse(claude.translate_agent(src))
+    assert fm["tools"] == ["Glob", "Grep", "Read"]
+
+
+def test_translate_agent_maps_copilot_tool_vocabulary(tmp_path):
+    src = tmp_path / "vs.agent.md"
+    src.write_text(
+        '---\ndescription: "VS."\ntools: [codebase, editFiles, runCommands]\n---\n\nB.\n'
+    )
+    fm, _ = frontmatter.parse(claude.translate_agent(src))
+    assert fm["tools"] == ["Bash", "Edit", "Glob", "Grep", "Read", "Write"]
+
+
+def test_translate_agent_preserves_an_explicit_empty_tool_list(tmp_path):
+    src = tmp_path / "empty.agent.md"
+    src.write_text('---\ndescription: "Empty."\ntools: []\n---\n\nBody.\n')
+    fm, _ = frontmatter.parse(claude.translate_agent(src))
+    assert fm["tools"] == []
+
+
+def test_translate_agent_expands_wildcard_to_explicit_tool_names(tmp_path):
+    src = tmp_path / "all.agent.md"
+    src.write_text('---\ndescription: "All."\ntools: ["*"]\n---\n\nBody.\n')
+    fm, _ = frontmatter.parse(claude.translate_agent(src))
+    assert fm["tools"] == [
+        "Bash",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Read",
+        "WebFetch",
+        "WebSearch",
+        "Write",
+    ]
 
 
 # ── prompt → command translation ──────────────────────────────────────────────
@@ -81,7 +123,7 @@ def test_translate_prompt_keeps_description_drops_agent_and_tools(tmp_path):
     )
     fm, body = frontmatter.parse(claude.translate_prompt(src))
     assert fm == {"description": "Fix lint errors."}
-    assert body == "Do the fixing."
+    assert body.endswith("Do the fixing.")
 
 
 # ── port_instructions ─────────────────────────────────────────────────────────
@@ -188,6 +230,19 @@ def test_port_commands_lets_a_prompt_win_over_a_starter(repo):
     assert "My own check." in text
 
 
+def test_port_commands_keeps_starter_when_only_a_nested_prompt_shares_a_name(repo):
+    """A nested prompt lands at a different path, so it must not suppress the starter."""
+    src = repo / claude.COPILOT_PROMPTS_DIR / "python"
+    src.mkdir(parents=True)
+    (src / "check.prompt.md").write_text(
+        '---\ndescription: "Python check."\n---\n\nCheck python.\n'
+    )
+    claude.port_commands()
+    commands = repo / claude.CLAUDE_COMMANDS_DIR
+    assert (commands / "python" / "check.md").exists()
+    assert (commands / "check.md").exists()
+
+
 # ── port_skills ───────────────────────────────────────────────────────────────
 
 
@@ -203,11 +258,43 @@ def test_port_skills_mirrors_each_skill(repo):
     assert (repo / claude.CLAUDE_SKILLS_DIR / "demo" / "SKILL.md").exists()
 
 
-def test_port_skills_prunes_a_stale_skill(repo):
+def test_port_skills_prunes_a_skill_it_generated(repo):
+    """A mirrored skill whose Copilot source disappeared is cleaned up."""
     _make_skill(repo / claude.COPILOT_SKILLS_DIR, "demo")
-    _make_skill(repo / claude.CLAUDE_SKILLS_DIR, "removed")
     claude.port_skills()
-    assert not (repo / claude.CLAUDE_SKILLS_DIR / "removed").exists()
+    shutil.rmtree(repo / claude.COPILOT_SKILLS_DIR / "demo")
+    claude.port_skills()
+    assert not (repo / claude.CLAUDE_SKILLS_DIR / "demo").exists()
+
+
+def test_port_skills_never_prunes_a_skill_it_did_not_generate(repo):
+    """A hand-written Claude skill is the developer's; Tara leaves it alone."""
+    _make_skill(repo / claude.COPILOT_SKILLS_DIR, "demo")
+    _make_skill(repo / claude.CLAUDE_SKILLS_DIR, "my-own")
+    claude.port_skills()
+    assert (repo / claude.CLAUDE_SKILLS_DIR / "my-own" / "SKILL.md").is_file()
+
+
+def test_port_skills_skips_an_unowned_collision(repo):
+    """A same-named skill Tara did not write is reported, not overwritten."""
+    _make_skill(repo / claude.COPILOT_SKILLS_DIR, "demo")
+    _make_skill(repo / claude.CLAUDE_SKILLS_DIR, "demo")
+    dest = repo / claude.CLAUDE_SKILLS_DIR / "demo"
+    (dest / "SKILL.md").write_text("mine\n")
+    lines = claude.port_skills()
+    assert (dest / "SKILL.md").read_text() == "mine\n"
+    assert any("skipped" in line for line in lines)
+
+
+def test_port_skills_ignores_a_stray_file_in_the_destination(repo):
+    """A plain file next to the skills must not crash the mirror."""
+    _make_skill(repo / claude.COPILOT_SKILLS_DIR, "demo")
+    dst = repo / claude.CLAUDE_SKILLS_DIR
+    dst.mkdir(parents=True)
+    (dst / "README.md").write_text("notes\n")
+    claude.port_skills()
+    assert (dst / "README.md").is_file()
+    assert (dst / "demo" / "SKILL.md").is_file()
 
 
 def test_port_skills_dry_run_writes_nothing(repo):
@@ -222,3 +309,41 @@ def test_port_skills_dry_run_writes_nothing(repo):
 def test_port_all_reports_every_section(repo):
     titles = [title for title, _ in claude.port_all()]
     assert titles == ["Instructions", "MCP", "Agents", "Commands", "Skills"]
+
+
+# ── never overwriting the developer's files ───────────────────────────────────
+
+
+def test_port_agents_leaves_a_hand_written_agent_alone(repo):
+    src = repo / claude.COPILOT_AGENTS_DIR
+    src.mkdir(parents=True)
+    (src / "yoda.agent.md").write_text('---\ndescription: "Y."\n---\n\nBody.\n')
+    dest = repo / claude.CLAUDE_AGENTS_DIR / "yoda.md"
+    dest.parent.mkdir(parents=True)
+    dest.write_text("my own agent\n")
+    lines = claude.port_agents()
+    assert dest.read_text() == "my own agent\n"
+    assert any("skipped" in line for line in lines)
+
+
+def test_port_agents_refreshes_its_own_output(repo):
+    src = repo / claude.COPILOT_AGENTS_DIR
+    src.mkdir(parents=True)
+    (src / "yoda.agent.md").write_text('---\ndescription: "Y."\n---\n\nBody.\n')
+    claude.port_agents()
+    dest = repo / claude.CLAUDE_AGENTS_DIR / "yoda.md"
+    assert generate.MARKER in dest.read_text()
+    (src / "yoda.agent.md").write_text('---\ndescription: "Y2."\n---\n\nBody.\n')
+    claude.port_agents()
+    assert "Y2." in dest.read_text()
+
+
+def test_port_commands_leaves_a_hand_written_command_alone(repo):
+    src = repo / claude.COPILOT_PROMPTS_DIR
+    src.mkdir(parents=True)
+    (src / "fix.prompt.md").write_text('---\ndescription: "F."\n---\n\nBody.\n')
+    dest = repo / claude.CLAUDE_COMMANDS_DIR / "fix.md"
+    dest.parent.mkdir(parents=True)
+    dest.write_text("mine\n")
+    claude.port_commands()
+    assert dest.read_text() == "mine\n"

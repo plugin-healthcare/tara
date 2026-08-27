@@ -21,13 +21,13 @@ import re
 import shutil
 import subprocess
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
 from tara import frontmatter
 from tara.core import repo_root
-from tara.skills import SKILLS_DIR
+from tara.skills import SKILLS_DIR, read_manifest
 
 LIBRARY_SKILLS_LOCK = Path(".tara") / "library-skills.json"
 
@@ -241,6 +241,20 @@ class SyncResult:
     unchanged: list[str]
     skipped: list[str]
     warnings: list[str]
+    # Skill name -> where the directory sync refused to overwrite came from.
+    skipped_reasons: dict[str, str] = field(default_factory=dict)
+
+
+def _existing_owner(name: str) -> str:
+    """Name the channel that installed an existing skill directory.
+
+    A skill listed in ``.tara/skills.toml`` was fetched from a git repo by
+    ``tara skill add`` (directly or as part of a theme). Anything else was
+    placed by Tara's own catalog during ``tara init``/``tara add``.
+    """
+    if name in read_manifest():
+        return "git-managed"
+    return "core catalog"
 
 
 def sync(root: Path | None = None, all_packages: bool = False) -> SyncResult:
@@ -300,16 +314,12 @@ def sync(root: Path | None = None, all_packages: bool = False) -> SyncResult:
     for name, skill in found.items():
         existing = lock.get(name)
         if existing is None:
-            # A skill dir we don't own already sits here: it was placed by the
-            # core selection (tara init/add) or a git theme. sync is
-            # additive and must never clobber the core, so skip and warn.
+            # A skill dir we don't own already sits here: it came from a git
+            # repo (`tara skill add`, a theme) or from Tara's own catalog via
+            # `tara init`/`tara add`. sync is additive and never clobbers those.
             if _dest(name).exists():
                 result.skipped.append(name)
-                result.warnings.append(
-                    f"Skipping '{name}' from {skill.package}: a skill with that "
-                    "name already exists (core/git-managed). Remove it first if "
-                    "you want the package version instead."
-                )
+                result.skipped_reasons[name] = _existing_owner(name)
                 continue
             _install_skill(skill)
             lock[name] = {"package": skill.package, "version": skill.version}

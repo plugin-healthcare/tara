@@ -36,14 +36,14 @@ CLAUDE_INSTRUCTIONS = Path("CLAUDE.md")
 COPILOT = "copilot"
 OPENCODE = "opencode"
 CLAUDE = "claude"
-SUPPORTED_TOOLS = (COPILOT, OPENCODE, CLAUDE)
+SUPPORTED_INTEGRATIONS = (COPILOT, OPENCODE, CLAUDE)
 
 # Shorthand accepted on the CLI and in legacy configs, meaning every tool.
-ALL_TOOLS = "all"
+ALL_INTEGRATIONS = "all"
 
 
-def normalize_tools(values: Iterable[str] | str) -> list[str]:
-    """Validate a set of tool names into the canonical configured list.
+def normalize_integrations(values: Iterable[str] | str) -> list[str]:
+    """Validate integration names into the canonical configured list.
 
     Accepts the ``all`` shorthand, ignores case and blanks, de-duplicates, and
     always includes Copilot, since every other tool is generated from it. A bare
@@ -57,21 +57,27 @@ def normalize_tools(values: Iterable[str] | str) -> list[str]:
         name = value.strip().lower()
         if not name:
             continue
-        if name == ALL_TOOLS:
-            selected.update(SUPPORTED_TOOLS)
+        if name in {ALL_INTEGRATIONS, "*"}:
+            selected.update(SUPPORTED_INTEGRATIONS)
             continue
-        if name not in SUPPORTED_TOOLS:
+        if name not in SUPPORTED_INTEGRATIONS:
             raise ValueError(
-                f"unknown tool '{value}'; choose from "
-                f"{', '.join((*SUPPORTED_TOOLS, ALL_TOOLS))}"
+                f"unknown integration '{value}'; choose from "
+                f"{', '.join((*SUPPORTED_INTEGRATIONS, ALL_INTEGRATIONS))}"
             )
         selected.add(name)
-    return [tool for tool in SUPPORTED_TOOLS if tool in selected]
+    return [
+        integration for integration in SUPPORTED_INTEGRATIONS if integration in selected
+    ]
 
 
-def port_targets(tools: Iterable[str]) -> list[str]:
-    """The configured tools whose files Tara generates (everything but Copilot)."""
-    return [tool for tool in normalize_tools(tools) if tool != COPILOT]
+def port_targets(integrations: Iterable[str]) -> list[str]:
+    """Configured integrations whose files Tara generates."""
+    return [
+        integration
+        for integration in normalize_integrations(integrations)
+        if integration != COPILOT
+    ]
 
 
 # ── Frontmatter helpers (shared by the ports) ─────────────────────────────────

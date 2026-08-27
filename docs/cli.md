@@ -13,6 +13,7 @@ $ tara [OPTIONS] COMMAND [ARGS]...
 
 **Options**:
 
+* `-V, --version`: Show the version and exit.
 * `--install-completion`: Install completion for the current shell.
 * `--show-completion`: Show completion for the current shell, to copy it or customize the installation.
 * `--help`: Show this message and exit.
@@ -20,7 +21,8 @@ $ tara [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `init`: Set up this repo: Copilot core, MCP, agent...
-* `tools`: Choose the agent tools this repo targets,...
+* `integrations`: Choose the coding-agent products Tara...
+* `tools`: Choose the coding-agent products Tara... (DEPRECATED)
 * `add`: Pick and install catalog artifacts...
 * `list`: Show the Copilot triggers active in this...
 * `check`: Run the project's lint/format/test gate.
@@ -36,9 +38,9 @@ $ tara [OPTIONS] COMMAND [ARGS]...
 
 Set up this repo: Copilot core, MCP, agent memory, tooling, then artifacts.
 
-Copilot's .github/ setup is always the source of truth. ``--tools`` adds
-further targets (e.g. ``--tools claude`` or ``--tools all``) whose files are
-generated from it; change them later with ``tara tools``.
+Copilot's .github/ setup is always the source of truth. ``--integrations``
+adds products such as Claude Code and OpenCode whose files are generated
+from it; change them later with ``tara integrations``.
 
 **Usage**:
 
@@ -52,19 +54,46 @@ $ tara init [OPTIONS] [STACK]
 
 **Options**:
 
-* `--tools, --tool TEXT`: Comma-separated agent tools to target (copilot, opencode, claude, or all). Copilot is always included.
-* `--all`: Select every catalog item (non-interactive).
-* `--dry-run`: Preview without writing.
+* `--integrations, --tools, --tool TEXT`: Comma-separated products to integrate with (copilot, opencode, claude, or all). Copilot is always included.
+* `-a, --all`: Select every catalog item (non-interactive).
+* `-n, --dry-run`: Preview without writing.
+* `-f, --force`: Allow overwriting existing files when confirmation is unavailable.
+* `--help`: Show this message and exit.
+
+## `tara integrations`
+
+Choose the coding-agent products Tara integrates with.
+
+Copilot is always included: its .github/ setup is the source of truth, and
+every other tool's files are generated from it. The selection is saved to
+.tara/config.toml, so `tara integrations` with no arguments regenerates the
+configured integrations.
+
+**Usage**:
+
+```console
+$ tara integrations [OPTIONS] [NAMES]...
+```
+
+**Arguments**:
+
+* `[NAMES]...`: Products to integrate with (copilot, opencode, claude, or all). Omit to pick from a menu.
+
+**Options**:
+
+* `-l, --list`: Show the current targets and exit.
+* `-n, --dry-run`: Preview without writing.
+* `-f, --force`: Allow overwriting existing files when confirmation is unavailable.
 * `--help`: Show this message and exit.
 
 ## `tara tools`
 
-Choose the agent tools this repo targets, then generate their files.
+Choose the coding-agent products Tara integrates with.
 
 Copilot is always included: its .github/ setup is the source of truth, and
 every other tool's files are generated from it. The selection is saved to
-.tara/config.toml, so `tara tools` with no arguments re-runs generation for
-whatever is already configured.
+.tara/config.toml, so `tara integrations` with no arguments regenerates the
+configured integrations.
 
 **Usage**:
 
@@ -74,12 +103,13 @@ $ tara tools [OPTIONS] [NAMES]...
 
 **Arguments**:
 
-* `[NAMES]...`: Tools to target (copilot, opencode, claude, or all). Omit to pick from a menu.
+* `[NAMES]...`: Products to integrate with (copilot, opencode, claude, or all). Omit to pick from a menu.
 
 **Options**:
 
-* `--list`: Show the current targets and exit.
-* `--dry-run`: Preview without writing.
+* `-l, --list`: Show the current targets and exit.
+* `-n, --dry-run`: Preview without writing.
+* `-f, --force`: Allow overwriting existing files when confirmation is unavailable.
 * `--help`: Show this message and exit.
 
 ## `tara add`
@@ -94,7 +124,7 @@ $ tara add [OPTIONS]
 
 **Options**:
 
-* `--all`: Select every catalog item (non-interactive).
+* `-a, --all`: Select every catalog item (non-interactive).
 * `--help`: Show this message and exit.
 
 ## `tara list`
@@ -148,7 +178,7 @@ $ tara standards [OPTIONS] [STACK]
 
 * `--show`: Print the canonical pyproject tool block and exit.
 * `--write`: Write .pre-commit-config.yaml if absent (never overwrites).
-* `--dry-run`: Preview without writing.
+* `-n, --dry-run`: Preview without writing.
 * `--help`: Show this message and exit.
 
 ## `tara audit`
@@ -211,8 +241,9 @@ $ tara sync [OPTIONS]
 
 **Options**:
 
-* `--all`: Scan all installed packages, not just direct deps.
+* `-a, --all`: Scan all installed packages, not just direct deps.
 * `--docs / --no-docs`: For packages with no skill, probe PyPI for an llms.txt and add found ones to the mcpdoc MCP server in .mcp.json.  [default: docs]
+* `-f, --force`: Allow overwriting existing files when confirmation is unavailable.
 * `--help`: Show this message and exit.
 
 ## `tara skill`
@@ -270,7 +301,7 @@ $ tara skill list [OPTIONS]
 
 **Options**:
 
-* `--all`: Show every indexed skill, marking installed (✓) vs available (—).
+* `-a, --all`: Show every indexed skill, marking installed (✓) vs available (—).
 * `--help`: Show this message and exit.
 
 ### `tara skill update`
@@ -334,7 +365,7 @@ $ tara skill sync [OPTIONS]
 
 **Options**:
 
-* `--all`: Scan all installed packages, not just direct deps.
+* `-a, --all`: Scan all installed packages, not just direct deps.
 * `--docs / --no-docs`: For packages with no skill, probe PyPI for an llms.txt and add found ones to the mcpdoc MCP server in .mcp.json.  [default: docs]
 * `--help`: Show this message and exit.
 
@@ -403,11 +434,11 @@ $ tara opencode [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-* `sync`: Deprecated alias for `tara tools opencode`.
+* `sync`: Deprecated alias for `tara integrations...
 
 ### `tara opencode sync`
 
-Deprecated alias for `tara tools opencode`.
+Deprecated alias for `tara integrations opencode`.
 
 **Usage**:
 
@@ -417,5 +448,6 @@ $ tara opencode sync [OPTIONS]
 
 **Options**:
 
-* `--dry-run`: Preview without writing.
+* `-n, --dry-run`: Preview without writing.
+* `-f, --force`: Allow overwriting existing files when confirmation is unavailable.
 * `--help`: Show this message and exit.

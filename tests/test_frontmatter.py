@@ -27,6 +27,12 @@ def test_parse_without_frontmatter_returns_original_text():
     assert "No frontmatter" in body
 
 
+@pytest.mark.parametrize("opening", ["---text", " ---", "\t---"])
+def test_parse_requires_an_exact_opening_delimiter(opening):
+    text = f"{opening}\nname: demo\n---\nbody\n"
+    assert frontmatter.parse(text) == ({}, text)
+
+
 def test_parse_unterminated_frontmatter_returns_original_text():
     fm, body = frontmatter.parse("---\nname: demo\nbody without a closing fence\n")
     assert fm == {}
@@ -153,3 +159,12 @@ def test_render_emits_valid_yaml_for_unicode():
 def test_model_rejects_unknown_keys():
     with pytest.raises(ValidationError):
         _Sample.model_validate({"name": "demo", "bogus": "nope"})
+
+
+def test_parse_ignores_an_indented_delimiter_inside_a_block_scalar():
+    """An indented `---` is block-scalar content, not the end of frontmatter."""
+    text = "---\nname: demo\nbody: |\n  ---\n  still yaml\n---\n\nReal body.\n"
+    fm, body = frontmatter.parse(text)
+    assert fm["name"] == "demo"
+    assert fm["body"] == "---\nstill yaml\n"
+    assert body == "Real body."

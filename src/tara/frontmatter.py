@@ -31,10 +31,12 @@ def parse(text: str) -> tuple[dict[str, Any], str]:
     rather than a string that has to be re-scanned. Returns ``({}, text)`` when
     the document has no valid ``---`` delimited YAML mapping.
     """
-    if not text.startswith(DELIM):
-        return {}, text
     lines = text.splitlines()
-    end = next((i for i in range(1, len(lines)) if lines[i].strip() == DELIM), None)
+    if not lines or lines[0].rstrip() != DELIM:
+        return {}, text
+    # The closing delimiter must sit at column 0: an indented `---` belongs to a
+    # block scalar's content, and treating it as the end truncates the mapping.
+    end = next((i for i in range(1, len(lines)) if lines[i].rstrip() == DELIM), None)
     if end is None:
         return {}, text
     try:
