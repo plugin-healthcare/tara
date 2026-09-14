@@ -168,12 +168,18 @@ def audit_skill(path: Path) -> list[Finding]:
         )
 
     line_count = text.count("\n") + 1
-    if line_count > 500:
+    if line_count > 200:
+        files = [
+            candidate for candidate in path.parent.rglob("*") if candidate.is_file()
+        ]
+        size_kib = sum(candidate.stat().st_size for candidate in files) / 1024
         out.append(
             Finding(
                 path,
                 WARNING,
-                f"SKILL.md is {line_count} lines; move detail into references/",
+                f"SKILL.md is {line_count} lines; the skill has {len(files)} files "
+                f"({size_kib:.1f} KiB). Split distinct jobs into focused skills and "
+                "move supporting detail into references/",
             )
         )
     return out

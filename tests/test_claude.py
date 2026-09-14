@@ -111,8 +111,9 @@ def test_translate_agent_expands_wildcard_to_explicit_tool_names(tmp_path):
 # ── prompt → command translation ──────────────────────────────────────────────
 
 
-def test_translate_prompt_keeps_description_drops_agent_and_tools(tmp_path):
-    src = tmp_path / "fix.prompt.md"
+def test_translate_prompt_keeps_description_and_imports_source(tmp_path):
+    src = tmp_path / ".github" / "prompts" / "fix.prompt.md"
+    src.parent.mkdir(parents=True)
     src.write_text(
         "---\n"
         'description: "Fix lint errors."\n'
@@ -121,9 +122,22 @@ def test_translate_prompt_keeps_description_drops_agent_and_tools(tmp_path):
         "---\n\n"
         "Do the fixing.\n"
     )
-    fm, body = frontmatter.parse(claude.translate_prompt(src))
+    dest = tmp_path / ".claude" / "commands" / "fix.md"
+    fm, body = frontmatter.parse(claude.translate_prompt(src, dest, tmp_path))
     assert fm == {"description": "Fix lint errors."}
-    assert body.endswith("Do the fixing.")
+    assert body.endswith("@../../.github/prompts/fix.prompt.md")
+    assert "Do the fixing." not in body
+
+
+def test_translate_nested_prompt_import_uses_destination_depth(tmp_path):
+    src = tmp_path / ".github" / "prompts" / "python" / "add-types.prompt.md"
+    src.parent.mkdir(parents=True)
+    src.write_text('---\ndescription: "Add types."\n---\n\nAdd them.\n')
+    dest = tmp_path / ".claude" / "commands" / "python" / "add-types.md"
+
+    _, body = frontmatter.parse(claude.translate_prompt(src, dest, tmp_path))
+
+    assert body.endswith("@../../../.github/prompts/python/add-types.prompt.md")
 
 
 # ── port_instructions ─────────────────────────────────────────────────────────

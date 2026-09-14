@@ -86,6 +86,30 @@ class AgentsConfig(BaseModel):
     gitignore: list[str] = Field(default_factory=list)
 
 
+class ArtifactsConfig(BaseModel):
+    """Catalog selections needed to reconstruct a repository setup."""
+
+    skills: list[str] = Field(default_factory=list)
+    agents: list[str] = Field(default_factory=list)
+    prompts: list[str] = Field(default_factory=list)
+    instructions: list[str] = Field(default_factory=list)
+    hooks: list[str] = Field(default_factory=list)
+    mcp: list[str] = Field(default_factory=list)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _sorted_names(cls, value: object) -> list[str]:
+        """Require artifact names to be strings and store them deterministically."""
+        if value is None:
+            return []
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            raise ValueError("artifact names must be a list of strings")
+        names = [item for item in value if isinstance(item, str)]
+        return sorted(set(names))
+
+
 class TaraConfig(BaseModel):
     """Repo setup state recorded by ``tara init``.
 
@@ -99,6 +123,7 @@ class TaraConfig(BaseModel):
     stack: str = "python"
     standards: StandardsConfig = Field(default_factory=StandardsConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
+    artifacts: ArtifactsConfig | None = None
 
     @field_validator("integrations", mode="before")
     @classmethod
@@ -181,7 +206,12 @@ def _dump(data: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_config(integrations: list[str] | str, stack: str, dry_run: bool) -> str:
+def write_config(
+    integrations: list[str] | str,
+    stack: str,
+    dry_run: bool,
+    artifacts: ArtifactsConfig | None = None,
+) -> str:
     """Record setup state in ``.tara/config.toml``, preserving existing overrides.
 
     Optional tables the config does not set are appended as commented examples so
@@ -194,6 +224,10 @@ def write_config(integrations: list[str] | str, stack: str, dry_run: bool) -> st
     for key, value in existing.items():
         if key not in ("tool", "tools", "integrations", "stack"):
             data[key] = value
+    if artifacts is not None:
+        data["artifacts"] = artifacts.model_dump()
+    elif "artifacts" not in data:
+        data["artifacts"] = ArtifactsConfig().model_dump()
     rel = CONFIG.as_posix()
     listed = ", ".join(selected)
     if dry_run:
@@ -207,3 +241,80 @@ def write_config(integrations: list[str] | str, stack: str, dry_run: bool) -> st
     path.write_text(text)
     verb = "updated" if existing else "wrote"
     return f"  {verb} {rel} (integrations={listed}, stack={stack})"
+
+
+_ARTIFACT_FIELDS = {
+    "skill": "skills",
+    "agent": "agents",
+    "prompt": "prompts",
+    "instructions": "instructions",
+    "hooks": "hooks",
+    "mcp": "mcp",
+}
+
+
+def merge_artifacts(
+    artifacts: ArtifactsConfig | None, items: list[tuple[str, str]]
+) -> ArtifactsConfig:
+    """Return a manifest containing ``items`` in addition to existing selections."""
+    merged = (artifacts or ArtifactsConfig()).model_copy(deep=True)
+    for kind, name in items:
+        field = _ARTIFACT_FIELDS.get(kind)
+        if field is None:
+            raise ValueError(f"unknown artifact kind '{kind}'")
+        names = getattr(merged, field)
+        if name not in names:
+            names.append(name)
+            names.sort()
+    return merged
+
+
+def _replace_artifacts_table(text: str, artifacts: ArtifactsConfig) -> str:
+    """Replace only ``[artifacts]`` so unrelated comments and formatting survive."""
+    lines = text.splitlines(keepends=True)
+    table_starts = [
+        index
+        for index, line in enumerate(lines)
+        if line.lstrip().startswith("[") and "]" in line
+    ]
+    artifact_start = next(
+        (
+            index
+            for index in table_starts
+            if lines[index].split("#", 1)[0].strip() == "[artifacts]"
+        ),
+        None,
+    )
+    table = _dump({"artifacts": artifacts.model_dump()}).lstrip("\n")
+    if artifact_start is None:
+        separator = "" if not text or text.endswith("\n\n") else "\n"
+        return f"{text}{separator}{table}"
+    artifact_end = next(
+        (index for index in table_starts if index > artifact_start), len(lines)
+    )
+    fields = set(ArtifactsConfig.model_fields)
+    preserved = [
+        line
+        for line in lines[artifact_start + 1 : artifact_end]
+        if not (
+            "=" in line
+            and line.split("=", 1)[0].strip() in fields
+            and not line.lstrip().startswith("#")
+        )
+    ]
+    replacement = table.rstrip("\n") + "\n" + "".join(preserved)
+    return "".join([*lines[:artifact_start], replacement, *lines[artifact_end:]])
+
+
+def record_artifacts(items: list[tuple[str, str]]) -> str:
+    """Add successful catalog selections to the rebuild manifest."""
+    cfg = TaraConfig.load()
+    artifacts = merge_artifacts(cfg.artifacts, items)
+    path = repo_root() / CONFIG
+    if not path.exists():
+        return write_config(cfg.integrations, cfg.stack, False, artifacts)
+    path.write_text(
+        _replace_artifacts_table(path.read_text(encoding="utf-8"), artifacts),
+        encoding="utf-8",
+    )
+    return f"  updated {CONFIG.as_posix()} artifact manifest"

@@ -139,6 +139,29 @@ def write_generated(dest: Path, text: str, dry_run: bool, force: bool = False) -
     return f"  wrote {rel}"
 
 
+def write_configured(dest: Path, text: str, dry_run: bool, force: bool = False) -> str:
+    """Write desired config output without assuming an existing file is Tara-owned."""
+    rel = dest.relative_to(repo_root())
+    if dest.is_symlink():
+        return f"  skipped {rel} (destination is a symlink, left untouched)"
+    if dest.is_file():
+        try:
+            if dest.read_text(encoding="utf-8") == text:
+                return f"  unchanged {rel}"
+        except (OSError, UnicodeDecodeError):
+            pass
+    if dest.exists() and not force:
+        if dry_run:
+            return f"  [dry-run] replace {rel} (confirmation required)"
+        if not confirm_takeover(dest, text):
+            return f"  skipped {rel} (overwrite requires --force)"
+    if dry_run:
+        return f"  [dry-run] {rel}"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(text, encoding="utf-8")
+    return f"  wrote {rel}"
+
+
 # ── generated-state manifest ──────────────────────────────────────────────────
 
 

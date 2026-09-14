@@ -8,8 +8,9 @@ maintain:
                            ``.github/copilot-instructions.md`` (no duplicated
                            instruction text)
 - ``.claude/agents/``      translated from ``.github/agents/*.agent.md``
-- ``.claude/commands/``    translated from ``.github/prompts/**/*.prompt.md``
-                           plus starter ``check``/``review`` commands
+- ``.claude/commands/``    thin wrappers that ``@``-import
+                           ``.github/prompts/**/*.prompt.md``, plus starter
+                           ``check``/``review`` commands
 - ``.claude/skills/``      mirrored from ``.github/skills/`` (identical SKILL.md)
 
 MCP needs no translation: Claude Code reads the repo-root ``.mcp.json`` with the
@@ -177,17 +178,26 @@ def translate_agent(source: Path) -> str:
     return agent.render(generate.marked(body))
 
 
-def translate_prompt(source: Path) -> str:
-    """Translate a Copilot ``.prompt.md`` file into a Claude Code slash command.
+def _relative_import(source: Path, destination: Path, root: Path) -> Path:
+    """Return the source path relative to the destination file's directory."""
+    source_rel = source.relative_to(root)
+    destination_dir = destination.relative_to(root).parent
+    return Path(*([".."] * len(destination_dir.parts)), source_rel)
 
-    Keeps the ``description`` and body; drops Copilot-only frontmatter
-    (``agent``/``tools``) that Claude commands don't use.
+
+def translate_prompt(source: Path, destination: Path, root: Path) -> str:
+    """Translate a Copilot prompt into a Claude command that imports its body.
+
+    Keeps the description, drops Copilot-only frontmatter, and points at the
+    source instead of copying it. Claude Code expands ``@`` references in slash
+    commands, so the Copilot prompt remains the single source of truth.
     """
-    fm, body = frontmatter.parse(source.read_text())
+    fm, _ = frontmatter.parse(source.read_text())
     description = frontmatter.text_of(fm.get("description"))
+    body = generate.marked(f"@{_relative_import(source, destination, root).as_posix()}")
     if not description:
-        return generate.marked(body)
-    return ClaudeCommand(description=description).render(generate.marked(body))
+        return body
+    return ClaudeCommand(description=description).render(body)
 
 
 # ── Port steps ────────────────────────────────────────────────────────────────
@@ -243,12 +253,14 @@ def port_agents(dry_run: bool = False, force: bool = False) -> list[str]:
 
 
 def port_commands(dry_run: bool = False, force: bool = False) -> list[str]:
-    """Translate ``.github/prompts/**/*.prompt.md`` and add starter commands.
+    """Wrap ``.github/prompts/**/*.prompt.md`` and add starter commands.
 
     Nesting is preserved: Claude Code turns ``python/add-types.md`` into the
     namespaced ``/python:add-types`` command. Prompt-derived commands take
     precedence; a starter command is only written when no command exists at that
-    path (on disk or from a ported prompt).
+    path (on disk or from a ported prompt). Each wrapper keeps the translated
+    frontmatter and imports the canonical prompt body through a relative ``@``
+    reference.
     """
     root = repo_root()
     lines: list[str] = []
@@ -264,7 +276,12 @@ def port_commands(dry_run: bool = False, force: bool = False) -> list[str]:
             # different command from the root check.md starter.
             produced.add(rel_dest.as_posix())
             lines.append(
-                generate.write_generated(dest, translate_prompt(src), dry_run, force)
+                generate.write_generated(
+                    dest,
+                    translate_prompt(src, dest, root),
+                    dry_run,
+                    force,
+                )
             )
 
     for filename, (command, body) in _STARTER_COMMANDS.items():

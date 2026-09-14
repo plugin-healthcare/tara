@@ -9,9 +9,11 @@ import pytest
 from tara.config import (
     CONFIG,
     AgentsConfig,
+    ArtifactsConfig,
     ConfigError,
     StandardsConfig,
     TaraConfig,
+    record_artifacts,
     write_config,
 )
 
@@ -136,6 +138,47 @@ def test_write_expands_all_to_explicit_integration_names(repo):
 def test_port_targets_excludes_copilot(repo):
     write_config(["claude"], "python", dry_run=False)
     assert TaraConfig.load().port_targets == ["claude"]
+
+
+def test_fresh_config_has_an_empty_artifact_manifest(repo):
+    write_config("copilot", "python", dry_run=False)
+
+    assert TaraConfig.load().artifacts == ArtifactsConfig()
+
+
+def test_record_artifacts_persists_sorted_unique_names(repo):
+    write_config("copilot", "python", dry_run=False)
+
+    record_artifacts(
+        [
+            ("agent", "yoda.agent.md"),
+            ("hooks", "prose-style"),
+            ("agent", "yoda.agent.md"),
+        ]
+    )
+
+    artifacts = TaraConfig.load().artifacts
+    assert artifacts is not None
+    assert artifacts.agents == ["yoda.agent.md"]
+    assert artifacts.hooks == ["prose-style"]
+
+
+def test_record_artifacts_preserves_existing_comments(repo):
+    write_config("copilot", "python", dry_run=False)
+    path = repo / CONFIG
+    path.write_text(path.read_text() + "# Keep this explanation.\n")
+
+    record_artifacts([("agent", "yoda.agent.md")])
+
+    text = path.read_text()
+    assert "# Keep this explanation." in text
+    assert "# [standards]" in text
+
+
+def test_load_preserves_missing_artifact_manifest_for_legacy_config(repo):
+    _write_raw(repo, 'integrations = ["copilot"]\nstack = "python"\n')
+
+    assert TaraConfig.load().artifacts is None
 
 
 # ── hand-edited configs must fail loudly, not guess ───────────────────────────

@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import tempfile
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from tara.core import data_path, repo_root
@@ -397,6 +397,25 @@ def update(name: str | None = None) -> list[tuple[str, str, str]]:
         _record(source, commit)
         results.append((n, old[:12], commit[:12]))
     return results
+
+
+def restore_missing(dry_run: bool = False) -> list[str]:
+    """Restore absent managed skills at their locked revision."""
+    manifest = read_manifest()
+    lock = read_lock()
+    lines: list[str] = []
+    for name, source in sorted(manifest.items()):
+        dest = repo_root() / SKILLS_DIR / name
+        if dest.exists():
+            continue
+        if dry_run:
+            lines.append(f"  [dry-run] restore skill {name}")
+            continue
+        locked_ref = lock.get(name, {}).get("commit") or source.ref
+        commit = fetch_skill(replace(source, ref=locked_ref), dest)
+        _record(source, commit)
+        lines.append(f"  restored skill {name} @ {commit[:12]}")
+    return lines
 
 
 def remove(name: str) -> None:

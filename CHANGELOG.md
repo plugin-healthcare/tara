@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `tara rebuild` reconstructs Tara-managed core files, agent docs, catalog selections, standards scaffolding, managed skills, and configured integrations from `.tara/config.toml`. Legacy configs migrate only catalog artifacts whose installed content Tara can identify, dry runs write nothing, and collisions require `--force`.
+- Catalog instructions for Python (`python.instructions.md`, correct and wrong examples for imports, typing, settings, errors, Polars, and tests), Dagster, and deployment.
+- Catalog skill `managing-github-issues` provides tightened guidance for bulk issue creation, sub-issue hierarchy, and project board fields through `gh`.
+- The catalog review prompt now requires evidence-based review of correctness, regressions, security, tests, documentation, and unnecessary complexity.
+- Claude Code hook bundles as a catalog kind. `tara add` offers `prose-style`, which blocks a write that introduces an em dash or an AI-tic sentence fragment into markdown. Hooks are merged into `.claude/settings.json` by appending, so existing settings and hand-written hooks are preserved, and re-installing is a no-op. The kind is only offered when the Claude Code integration is configured.
+
+### Changed
+
+- `tara audit` warns when a `SKILL.md` exceeds 200 lines and reports each skill's total file count and size.
+- Claude Code commands now keep translated frontmatter but `@`-import their canonical `.github/prompts/` body instead of copying it. Claude subagent bodies remain generated copies because Claude Code does not expand imports in agent definitions.
+
+- `markdown.instructions.md` covers `.mdx` and `.qmd`, and states the prose rules that were previously implicit: no em dashes ever, full sentences, no contrastive tic, no colon-into-fragment construction, and no overuse of bold, italics, or emoji.
+
 ## [1.1.0] - 2026-08-26
 
 ### Added

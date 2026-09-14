@@ -77,6 +77,28 @@ def test_audit_non_trigger_description_warns(repo):
     assert any("when" in f.message for f in findings)
 
 
+def test_audit_oversized_skill_recommends_specialising_or_references(repo):
+    path = _write_skill(
+        repo,
+        "large",
+        "---\n"
+        "name: large\n"
+        'description: "Use when testing an oversized skill body."\n'
+        "---\n\n"
+        "# Large\n\n" + "\n".join(f"Instruction {line}." for line in range(205)) + "\n",
+    )
+
+    findings = audit.audit_skill(path)
+
+    assert any(
+        "focused skills" in finding.message
+        and "references/" in finding.message
+        and "1 files" in finding.message
+        and "KiB" in finding.message
+        for finding in findings
+    )
+
+
 def test_audit_all_discovers_and_returns_findings(repo):
     _write_skill(repo, "demo", "---\nname: wrong\n---\n\nx\n")
     findings = audit.audit_all()

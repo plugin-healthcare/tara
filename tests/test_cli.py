@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from typer.testing import CliRunner
 
 from tara import generate
@@ -14,7 +16,8 @@ runner = CliRunner()
 def test_root_help_supports_short_alias():
     result = runner.invoke(app, ["-h"])
     assert result.exit_code == 0
-    assert "Usage: tara" in result.output
+    assert "Usage:" in result.output
+    assert "tara" in result.output
 
 
 def test_nested_help_supports_short_alias():
@@ -292,6 +295,131 @@ def test_sync_without_extra_tools_still_succeeds(repo):
     result = runner.invoke(app, ["sync", "--no-docs"])
     assert result.exit_code == 0, result.output
     assert not (repo / "CLAUDE.md").exists()
+
+
+def test_rebuild_restores_manifest_from_config(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        'integrations = ["copilot", "claude"]\n'
+        'stack = "python"\n\n'
+        "[artifacts]\n"
+        'agents = ["yoda.agent.md"]\n'
+    )
+
+    result = runner.invoke(app, ["rebuild"])
+
+    assert result.exit_code == 0, result.output
+    assert (repo / ".github" / "copilot-instructions.md").is_file()
+    assert (repo / ".github" / "agents" / "yoda.agent.md").is_file()
+    assert (repo / ".claude" / "agents" / "yoda.md").is_file()
+    assert (repo / ".agents" / "plan" / "index.md").is_file()
+
+
+def test_rebuild_dry_run_writes_nothing(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        'integrations = ["copilot"]\n'
+        'stack = "python"\n\n'
+        "[artifacts]\n"
+        'agents = ["yoda.agent.md"]\n'
+    )
+
+    result = runner.invoke(app, ["rebuild", "--dry-run"])
+
+    assert result.exit_code == 0, result.output
+    assert "[dry-run]" in result.output
+    assert not (repo / ".github").exists()
+    assert not (repo / ".agents").exists()
+
+
+def test_rebuild_migrates_recognized_legacy_artifacts(repo):
+    runner.invoke(app, ["agent", "add", "yoda"])
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('integrations = ["copilot"]\nstack = "python"\n')
+
+    result = runner.invoke(app, ["rebuild"])
+
+    assert result.exit_code == 0, result.output
+    artifacts = TaraConfig.load().artifacts
+    assert artifacts is not None
+    assert artifacts.agents == ["yoda.agent.md"]
+
+
+def test_rebuild_does_not_claim_a_hand_written_catalog_collision(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text('integrations = ["copilot"]\nstack = "python"\n')
+    agent = repo / ".github" / "agents" / "yoda.agent.md"
+    agent.parent.mkdir(parents=True)
+    agent.write_text("mine\n")
+
+    result = runner.invoke(app, ["rebuild"])
+
+    assert result.exit_code == 0, result.output
+    artifacts = TaraConfig.load().artifacts
+    assert artifacts is not None
+    assert artifacts.agents == []
+    assert agent.read_text() == "mine\n"
+
+
+def test_rebuild_preserves_unowned_catalog_collision(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        'integrations = ["copilot"]\n'
+        'stack = "python"\n\n'
+        "[artifacts]\n"
+        'agents = ["yoda.agent.md"]\n'
+    )
+    agent = repo / ".github" / "agents" / "yoda.agent.md"
+    agent.parent.mkdir(parents=True)
+    agent.write_text("mine\n")
+
+    result = runner.invoke(app, ["rebuild"])
+
+    assert result.exit_code == 0, result.output
+    assert agent.read_text() == "mine\n"
+    assert "requires --force" in result.output
+
+
+def test_rebuild_preserves_unowned_mcp_server_collision(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        'integrations = ["copilot"]\n'
+        'stack = "python"\n\n'
+        "[artifacts]\n"
+        'mcp = ["github"]\n'
+    )
+    mcp = repo / ".mcp.json"
+    original = {"mcpServers": {"github": {"command": "mine"}}}
+    mcp.write_text(json.dumps(original))
+
+    result = runner.invoke(app, ["rebuild"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(mcp.read_text()) == original
+    assert "requires --force" in result.output
+
+
+def test_rebuild_does_not_add_mcp_to_an_unowned_config(repo):
+    path = repo / CONFIG
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        'integrations = ["copilot"]\nstack = "python"\n\n[artifacts]\nmcp = ["git"]\n'
+    )
+    mcp = repo / ".mcp.json"
+    original = {"mcpServers": {"custom": {"command": "mine"}}}
+    mcp.write_text(json.dumps(original))
+
+    result = runner.invoke(app, ["rebuild"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(mcp.read_text()) == original
+    assert "requires --force" in result.output
 
 
 def test_opencode_sync_alias_still_generates(repo):

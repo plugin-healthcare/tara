@@ -56,6 +56,7 @@ Every command operates on the current working directory (the repo you are in).
 
 ```bash
 tara init            # write copilot-instructions.md + .mcp.json, then pick artifacts
+tara rebuild         # restore the configured setup after upgrading Tara
 tara list            # show the guardrails active in this repo
 tara check           # run the lint/format/test gate
 tara audit           # lint your skills/agents/instructions for best practices
@@ -68,7 +69,7 @@ Once the files are in place, see [`docs/using-in-copilot.md`](docs/using-in-copi
 Full reference (every command, flag, and argument) is auto-generated in [`docs/cli.md`](docs/cli.md); refresh it with `uv run python scripts/gen_cli_docs.py`.
 The essentials:
 
-- **Setup:** `tara init` (write instructions + `.mcp.json`, pick artifacts), `tara add` (re-open the picker), `tara integrations` (choose which coding-agent products Tara targets), `tara sync` (pull skills/docs from installed packages, then regenerate every configured integration).
+- **Setup:** `tara init` (write instructions + `.mcp.json`, pick artifacts), `tara rebuild` (restore Tara-managed files from `.tara/config.toml` after an upgrade), `tara add` (re-open the picker), `tara integrations` (choose which coding-agent products Tara targets), `tara sync` (pull skills/docs from installed packages, then regenerate every configured integration).
 - **Inspect:** `tara list` (what your agent will pick up).
 - **Skills & agents:** `tara skill add|list|update|remove|sync`, `tara agent list|add`.
 - **Quality gate:** `tara check` (ruff, `ty`, pytest, `uv audit`), `tara standards` (compare tooling to the opinionated baseline), `tara audit` (lint guardrail artifacts).
@@ -88,7 +89,7 @@ The essentials:
 .agents/                           # tracked working docs (agent memory)
   plan/ design/ review/ memory/    # each seeded with an index.md
 .tara/
-  config.toml                      # setup state: tools + stack (+ [standards]/[agents] options)
+  config.toml                      # setup state: integrations, stack, and catalog artifacts
   skills.toml                      # skill manifest (source of truth)
   skills.lock                      # pinned commits
   checks.toml                      # optional: override the check gate
@@ -126,13 +127,15 @@ opencode.json            # references .github/copilot-instructions.md + MCP serv
 
 ```
 CLAUDE.md                # a pointer that @-imports .github/copilot-instructions.md
-.claude/agents/*.md      # subagents translated from .github/agents/*.agent.md
-.claude/commands/*.md    # slash commands from .github/prompts/**/*.prompt.md
+.claude/agents/*.md      # generated copies; Claude does not expand imports in agents
+.claude/commands/*.md    # thin wrappers importing .github/prompts/**/*.prompt.md
 .claude/skills/<name>/   # mirrored from .github/skills/<name>/
+.claude/settings.json    # optional hook bundles picked in `tara add`
 ```
 
 Claude Code reads the repo-root `.mcp.json` natively, so MCP needs no translation.
 Prompt nesting is preserved: `.github/prompts/python/add-types.prompt.md` becomes the `/python:add-types` command.
+Claude Code does not expand `@` imports in subagent bodies, so Tara must copy agent bodies into generated files while keeping `.github/agents/` as the authored source.
 
 Tara complements your setup; it never silently overwrites it.
 Every generated file carries a marker, and mirrored skills are recorded in `.tara/generated.json`.

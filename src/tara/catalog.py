@@ -7,13 +7,15 @@ instructions are copied from package data into the repo's ``.github/``.
 
 from __future__ import annotations
 
+import json
 import shutil
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from tara import frontmatter, skills
+from tara import frontmatter, generate, hooks, skills
 from tara.core import add_mcp_server, data_path, repo_root
+from tara.sync import normalize_package_name
 
 GITHUB = Path(".github")
 
@@ -23,7 +25,7 @@ class CatalogItem:
     """One offerable catalog artifact (skill, agent, prompt, instructions, or MCP)."""
 
     name: str
-    kind: str  # skill | agent | prompt | instructions | mcp
+    kind: str  # skill | agent | prompt | instructions | hooks | mcp
     description: str
     source: Path | None = None  # package-data path for bundled items
     is_set: bool = False  # skill themes that install a bundle of skills
@@ -155,6 +157,69 @@ def catalog_mcp() -> list[CatalogItem]:
     return items
 
 
+def catalog_hooks() -> list[CatalogItem]:
+    """Claude Code hook bundles offered in the picker, one entry per bundle.
+
+    Installing one merges its events into ``.claude/settings.json``; it is only
+    useful once the Claude Code integration is configured.
+    """
+    items: list[CatalogItem] = []
+    for name in hooks.bundle_names():
+        bundle = hooks.read_bundle(name)
+        items.append(
+            CatalogItem(
+                name=name,
+                kind="hooks",
+                description=str(bundle.get("description", "")),
+            )
+        )
+    return items
+
+
+def instructions_index() -> dict[str, list[str]]:
+    """Package triggers per bundled instruction file, from ``instructions/index.toml``.
+
+    A file with no entry is never installed automatically; it stays opt-in
+    through the picker.
+    """
+    path = data_path() / "catalog" / "instructions" / "index.toml"
+    if not path.exists():
+        return {}
+    raw = tomllib.loads(path.read_text()).get("instructions", {})
+    return {
+        name: list(entry.get("packages", []))
+        for name, entry in raw.items()
+        if isinstance(entry, dict)
+    }
+
+
+def instructions_for_packages(installed: set[str]) -> list[CatalogItem]:
+    """Bundled instruction files triggered by an installed package.
+
+    Matching is on the normalized distribution name, so ``ruamel-yaml`` and
+    ``ruamel.yaml`` are the same package. A file already present in the repo is
+    skipped: it may be the developer's own edit of it, which install would
+    overwrite.
+    """
+    normalized = {normalize_package_name(p) for p in installed}
+    triggers = instructions_index()
+    if not triggers:
+        return []
+    present = {
+        item.name: item
+        for item in _bundled("instructions", "instructions", "*.instructions.md")
+    }
+    dest_dir = repo_root() / _DEST["instructions"]
+    out: list[CatalogItem] = []
+    for name, packages in sorted(triggers.items()):
+        item = present.get(name)
+        if item is None or (dest_dir / name).exists():
+            continue
+        if any(normalize_package_name(p) in normalized for p in packages):
+            out.append(item)
+    return out
+
+
 def catalog(kinds: list[str]) -> dict[str, list[CatalogItem]]:
     """Collect catalog items for each requested kind, keyed by kind."""
     out: dict[str, list[CatalogItem]] = {}
@@ -168,6 +233,8 @@ def catalog(kinds: list[str]) -> dict[str, list[CatalogItem]]:
         out["instructions"] = _bundled(
             "instructions", "instructions", "*.instructions.md"
         )
+    if "hooks" in kinds:
+        out["hooks"] = catalog_hooks()
     if "mcp" in kinds:
         out["mcp"] = catalog_mcp()
     return out
@@ -207,6 +274,9 @@ def install_item(item: CatalogItem) -> str:
         source, commit = skills.add(item.name)
         return f"  skill   {source.name} @ {commit[:12]}"
 
+    if item.kind == "hooks":
+        return hooks.install(item.name)
+
     if item.kind == "mcp":
         entry = _mcp_catalog_raw().get(item.name)
         if entry is None:
@@ -230,3 +300,80 @@ def install_item(item: CatalogItem) -> str:
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(item.source, dest)
     return f"  {item.kind:7s} {item.name}"
+
+
+def rebuild_item(item: CatalogItem, dry_run: bool = False, force: bool = False) -> str:
+    """Restore one selected catalog item without silently replacing a collision."""
+    if item.kind == "hooks":
+        return hooks.install(item.name, dry_run=dry_run)
+    if item.kind == "mcp":
+        if dry_run:
+            return f"  [dry-run] mcp {item.name}"
+        return install_item(item)
+
+    if item.kind == "skill":
+        dest = repo_root() / skills.SKILLS_DIR / item.name
+        if item.source is None:
+            if dest.exists() and not force:
+                rel = dest.relative_to(repo_root())
+                return f"  skipped {rel} (overwrite requires --force)"
+            if dry_run:
+                return f"  [dry-run] skill {item.name}"
+            return install_item(item)
+        replacement = item.source
+    else:
+        assert item.source is not None
+        dest = repo_root() / _DEST[item.kind] / item.name
+        replacement = item.source
+
+    if dest.exists() and not force:
+        if (
+            dest.is_file()
+            and replacement.is_file()
+            and dest.read_bytes() == replacement.read_bytes()
+        ):
+            return f"  unchanged {dest.relative_to(repo_root())}"
+        if dry_run:
+            rel = dest.relative_to(repo_root())
+            return f"  [dry-run] replace {rel} (confirmation required)"
+        if not generate.confirm_takeover(dest, replacement, item.kind):
+            return f"  skipped {dest.relative_to(repo_root())} (overwrite requires --force)"
+    if dry_run:
+        return f"  [dry-run] {item.kind} {item.name}"
+    return install_item(item)
+
+
+def installed_items(kinds: list[str]) -> list[CatalogItem]:
+    """Recognize catalog entries already present in an older Tara repository."""
+    root = repo_root()
+    skill_manifest = skills.read_manifest()
+    installed: list[CatalogItem] = []
+    for items in catalog(kinds).values():
+        for item in items:
+            if item.kind == "skill":
+                present = (
+                    item.name in skill_manifest
+                    or (root / skills.SKILLS_DIR / item.name).is_dir()
+                )
+            elif item.kind == "hooks":
+                present = hooks.is_installed(item.name)
+            elif item.kind == "mcp":
+                present = item.name in _installed_mcp_names()
+            else:
+                present = (root / _DEST[item.kind] / item.name).is_file()
+            if present:
+                installed.append(item)
+    return installed
+
+
+def _installed_mcp_names() -> set[str]:
+    """Names in the current repo MCP configuration."""
+    path = repo_root() / ".mcp.json"
+    if not path.is_file():
+        return set()
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return set()
+    servers = data.get("mcpServers", {}) if isinstance(data, dict) else {}
+    return set(servers) if isinstance(servers, dict) else set()

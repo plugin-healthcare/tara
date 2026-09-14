@@ -5,6 +5,7 @@ Copilot's .github/ setup is the single source of truth; the files opencode and
 Claude Code read are generated from it.
 Commands:
   init      write instructions + MCP + memory, then pick artifacts
+  rebuild   reconstruct the configured setup after upgrading Tara
   sync      pull package skills, then regenerate every configured tool's files
   integrations choose the coding-agent products Tara targets and generate their files
   add       pick and install more catalog artifacts (skills/agents/prompts/instructions)
@@ -19,7 +20,9 @@ Commands:
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import sys
+import tomllib
 from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Annotated
@@ -32,8 +35,10 @@ from tara import catalog as catalog_mod
 from tara import check as check_mod
 from tara import claude as claude_mod
 from tara import config as config_mod
+from tara import core as core_mod
 from tara import docs as docs_mod
 from tara import frontmatter
+from tara import generate as generate_mod
 from tara import opencode as opencode_mod
 from tara import review as review_mod
 from tara import skills as skills_mod
@@ -124,6 +129,17 @@ IntegrationsOpt = Annotated[
 
 MENU_KINDS = ["skills", "agents", "prompts", "instructions", "mcp"]
 
+# Hook bundles land in .claude/settings.json, so they are only offered once the
+# Claude Code integration is configured.
+_CLAUDE_ONLY_KINDS = ["hooks"]
+
+
+def _menu_kinds(integrations: list[str]) -> list[str]:
+    """Catalog kinds to offer, given the configured integrations."""
+    if CLAUDE in integrations:
+        return [*MENU_KINDS, *_CLAUDE_ONLY_KINDS]
+    return list(MENU_KINDS)
+
 
 SyncAllOpt = Annotated[
     bool,
@@ -189,7 +205,15 @@ def _run_sync(all_: bool, docs: bool) -> None:
         except skills_mod.SkillError as exc:
             typer.echo(f"  warning: could not install indexed skill '{target}': {exc}")
 
-    # Phase 3: llms.txt docs fallback.
+    # Phase 3: scoped instructions triggered by an installed package.
+    for item in catalog_mod.instructions_for_packages(direct):
+        try:
+            typer.echo(f"{catalog_mod.install_item(item)} (indexed)")
+            config_mod.record_artifacts([(item.kind, item.name)])
+        except Exception as exc:  # noqa: BLE001 — one bad file must not stop the sync
+            typer.echo(f"  warning: could not install '{item.name}': {exc}")
+
+    # Phase 4: llms.txt docs fallback.
     if docs:
         still_uncovered = [
             pkg
@@ -268,7 +292,7 @@ def init(
         return
 
     # Optional extras: pick catalog artifacts, then scan installed packages.
-    _select_and_install(MENU_KINDS, all_)
+    _select_and_install(_menu_kinds(selected), all_)
     if sys.stdin.isatty() and typer.confirm(
         "\nAlso scan installed packages for skills to sync?", default=False
     ):
@@ -395,8 +419,8 @@ def _select_integrations(current: list[str]) -> list[str]:
 def add(
     all_: AllOpt = False,
 ) -> None:
-    """Pick and install catalog artifacts (skills, agents, prompts, instructions)."""
-    _select_and_install(MENU_KINDS, all_)
+    """Pick and install catalog artifacts (skills, agents, prompts, instructions, hooks)."""
+    _select_and_install(_menu_kinds(config_mod.TaraConfig.load().integrations), all_)
 
 
 @app.command(name="list")
@@ -483,11 +507,15 @@ def _select_and_install(kinds: list[str], select_all: bool) -> None:
         return
 
     typer.echo("\nInstalling:")
+    installed: list[tuple[str, str]] = []
     for item in chosen:
         try:
             typer.echo(catalog_mod.install_item(item))
+            installed.append((item.kind, item.name))
         except Exception as exc:  # noqa: BLE001 — surface install errors per item
             typer.echo(f"  failed {item.name}: {exc}", err=True)
+    if installed:
+        config_mod.record_artifacts(installed)
 
 
 _SELECT_ALL = object()  # sentinel for the "select all" picker entry
@@ -659,7 +687,11 @@ def skill_sync(
     repo in Tara's index (e.g. duckdb, streamlit), fetches and installs those
     skills automatically.
 
-    Phase 3 — docs fallback (--docs, on by default): for packages still without
+    Phase 3 — scoped instructions: installs a bundled .instructions.md whose
+    index entry names an installed package (e.g. dagster), unless the repo
+    already has that file.
+
+    Phase 4 — docs fallback (--docs, on by default): for packages still without
     any skill, queries PyPI for a docs URL and probes for llms.txt. Found sources
     are wired into the mcpdoc MCP server in .mcp.json.
 
@@ -706,6 +738,7 @@ def agent_add(
         )
         raise typer.Exit(1)
     typer.echo(catalog_mod.install_item(item).strip())
+    config_mod.record_artifacts([(item.kind, item.name)])
 
 
 # ── check ─────────────────────────────────────────────────────────────────────
@@ -1022,6 +1055,241 @@ def _scaffold(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content)
     typer.echo(f"Created {path.relative_to(repo_root())}")
+
+
+_ARTIFACT_KINDS = (
+    ("skills", "skill"),
+    ("agents", "agent"),
+    ("prompts", "prompt"),
+    ("instructions", "instructions"),
+    ("hooks", "hooks"),
+    ("mcp", "mcp"),
+)
+
+
+def _artifact_pairs(
+    artifacts: config_mod.ArtifactsConfig,
+) -> list[tuple[str, str]]:
+    """Flatten configured catalog selections into item lookup keys."""
+    return [
+        (kind, name)
+        for field, kind in _ARTIFACT_KINDS
+        for name in getattr(artifacts, field)
+    ]
+
+
+def _same_tree(left: Path, right: Path) -> bool:
+    """Return whether two real directory trees contain the same files and bytes."""
+    if (
+        not left.is_dir()
+        or not right.is_dir()
+        or left.is_symlink()
+        or right.is_symlink()
+    ):
+        return False
+    left_files = {
+        path.relative_to(left): path
+        for path in left.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    right_files = {
+        path.relative_to(right): path
+        for path in right.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    if left_files.keys() != right_files.keys():
+        return False
+    return all(
+        left_files[relative].read_bytes() == right_files[relative].read_bytes()
+        for relative in left_files
+    )
+
+
+def _matches_catalog_source(item: catalog_mod.CatalogItem) -> bool:
+    """Prove an installed candidate matches the catalog source exactly."""
+    root = repo_root()
+    if item.kind == "skill":
+        if item.name in skills_mod.read_manifest():
+            return True
+        if item.source is None:
+            return False
+        return _same_tree(root / skills_mod.SKILLS_DIR / item.name, item.source)
+    if item.kind == "hooks":
+        return True
+    if item.kind == "mcp":
+        path = root / core_mod.MCP_CONFIG
+        if not path.is_file() or path.is_symlink():
+            return False
+        try:
+            installed = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        servers = installed.get("mcpServers", {})
+        return isinstance(servers, dict) and servers.get(
+            item.name
+        ) == _catalog_mcp_config(item.name)
+    if item.source is None:
+        return False
+    destinations = {
+        "agent": Path(".github") / "agents",
+        "prompt": Path(".github") / "prompts",
+        "instructions": Path(".github") / "instructions",
+    }
+    dest = root / destinations[item.kind] / item.name
+    return (
+        dest.is_file()
+        and not dest.is_symlink()
+        and dest.read_bytes() == item.source.read_bytes()
+    )
+
+
+def _catalog_mcp_config(name: str) -> dict[object, object] | None:
+    """Read one catalog MCP configuration."""
+    path = data_path() / "mcp" / "catalog.toml"
+    try:
+        catalog = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    entry = catalog.get("servers", {}).get(name, {})
+    config = entry.get("config") if isinstance(entry, dict) else None
+    return config if isinstance(config, dict) else None
+
+
+def _mcp_config_is_owned(raw: object, stack: str) -> bool:
+    """Prove every existing MCP entry came from Tara's core or catalog."""
+    if not isinstance(raw, dict):
+        return False
+    servers = raw.get("mcpServers")
+    if not isinstance(servers, dict):
+        return False
+    known = core_mod.merged_servers(stack)
+    catalog_path = data_path() / "mcp" / "catalog.toml"
+    try:
+        catalog = tomllib.loads(catalog_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    entries = catalog.get("servers", {})
+    if isinstance(entries, dict):
+        known |= {
+            name: entry["config"]
+            for name, entry in entries.items()
+            if isinstance(entry, dict) and isinstance(entry.get("config"), dict)
+        }
+    return all(
+        name in known and known[name] == config for name, config in servers.items()
+    )
+
+
+def _rebuild_catalog_item(
+    item: catalog_mod.CatalogItem, stack: str, dry_run: bool, force: bool
+) -> str:
+    """Restore one catalog item while protecting nested MCP server collisions."""
+    if item.kind != "mcp":
+        return catalog_mod.rebuild_item(item, dry_run, force)
+    path = repo_root() / core_mod.MCP_CONFIG
+    desired = _catalog_mcp_config(item.name)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except (OSError, json.JSONDecodeError):
+        raw = {}
+    servers = raw.get("mcpServers", {}) if isinstance(raw, dict) else {}
+    current = servers.get(item.name) if isinstance(servers, dict) else None
+    if current == desired:
+        return f"  unchanged mcp {item.name}"
+    if path.exists() and not force and not _mcp_config_is_owned(raw, stack):
+        return f"  skipped mcp {item.name} (overwrite requires --force)"
+    if dry_run:
+        return f"  [dry-run] mcp {item.name}"
+    return catalog_mod.install_item(item)
+
+
+def _rebuild_manifest(
+    cfg: config_mod.TaraConfig, dry_run: bool
+) -> config_mod.ArtifactsConfig:
+    """Return the explicit manifest, discovering legacy selections once."""
+    if cfg.artifacts is not None:
+        return cfg.artifacts
+    discovered = catalog_mod.installed_items(
+        ["skills", "agents", "prompts", "instructions", "hooks", "mcp"]
+    )
+    selections = [
+        (item.kind, item.name) for item in discovered if _matches_catalog_source(item)
+    ]
+    artifacts = config_mod.merge_artifacts(None, selections)
+    if dry_run:
+        typer.echo(f"  [dry-run] record {len(selections)} recognized catalog artifacts")
+    else:
+        typer.echo(config_mod.record_artifacts(selections))
+    return artifacts
+
+
+def _configured_catalog_items(
+    artifacts: config_mod.ArtifactsConfig,
+) -> list[catalog_mod.CatalogItem]:
+    """Resolve configured names against the catalog before rebuild writes anything."""
+    available = catalog_mod.catalog(
+        ["skills", "agents", "prompts", "instructions", "hooks", "mcp"]
+    )
+    indexed = {
+        (item.kind, item.name): item for items in available.values() for item in items
+    }
+    pairs = _artifact_pairs(artifacts)
+    missing = [f"{kind}:{name}" for kind, name in pairs if (kind, name) not in indexed]
+    if missing:
+        joined = ", ".join(missing)
+        typer.echo(
+            f"error: configured catalog artifacts no longer exist: {joined}", err=True
+        )
+        raise typer.Exit(1)
+    return [indexed[pair] for pair in pairs]
+
+
+@app.command()
+def rebuild(dry_run: DryRun = False, force: ForceOpt = False) -> None:
+    """Reconstruct the Tara-managed setup from .tara/config.toml.
+
+    This is the upgrade path after installing a new Tara version. Existing files are
+    previewed and confirmed interactively; non-interactive collisions are skipped unless
+    ``--force`` is explicit.
+    """
+    if not (repo_root() / config_mod.CONFIG).is_file():
+        typer.echo("error: no .tara/config.toml; run `tara init` first", err=True)
+        raise typer.Exit(1)
+    cfg = _load_config()
+    artifacts = _rebuild_manifest(cfg, dry_run)
+    selected = _configured_catalog_items(artifacts)
+    root = repo_root()
+
+    typer.echo("Rebuilding Copilot core:")
+    typer.echo(
+        generate_mod.write_configured(
+            root / core_mod.COPILOT_INSTRUCTIONS,
+            core_mod.assemble_instructions(cfg.stack),
+            dry_run,
+            force,
+        )
+    )
+    mcp = (
+        json.dumps({"mcpServers": core_mod.merged_servers(cfg.stack)}, indent=2) + "\n"
+    )
+    typer.echo(
+        generate_mod.write_configured(root / core_mod.MCP_CONFIG, mcp, dry_run, force)
+    )
+    typer.echo(agent_docs_mod.write_agent_docs(dry_run, cfg.agents.gitignore))
+    _report_standards(cfg.stack, write=True, dry_run=dry_run)
+
+    restored_skills = skills_mod.restore_missing(dry_run)
+    if restored_skills:
+        typer.echo("\nRestoring managed skills:")
+        for line in restored_skills:
+            typer.echo(line)
+
+    if selected:
+        typer.echo("\nRestoring catalog artifacts:")
+        for item in selected:
+            typer.echo(_rebuild_catalog_item(item, cfg.stack, dry_run, force))
+
+    _generate_for(cfg.port_targets, dry_run, force)
 
 
 @app.command()

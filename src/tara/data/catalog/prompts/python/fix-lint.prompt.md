@@ -11,4 +11,5 @@ Fix all ruff lint and formatting issues in the provided Python code.
 3. Run `uv run ruff format` to apply formatting.
 4. Re-run `uv run ruff check` to confirm zero violations.
 
-Do NOT suppress rules with `# noqa` unless the violation is a known false positive — fix the code instead.
+Do NOT suppress rules with `# noqa` unless the violation is a known false positive.
+Fix the code instead.

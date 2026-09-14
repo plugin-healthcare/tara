@@ -29,6 +29,7 @@ $ tara [OPTIONS] COMMAND [ARGS]...
 * `standards`: Report how this repo's tooling differs...
 * `audit`: Lint Copilot guardrail artifacts (skills,...
 * `new`: Scaffold a prompt, agent, or document from...
+* `rebuild`: Reconstruct the Tara-managed setup from...
 * `sync`: Bring everything up to date: package...
 * `skill`: Manage Copilot skills (.github/skills/).
 * `agent`: Manage Copilot agents (.github/agents/).
@@ -114,7 +115,7 @@ $ tara tools [OPTIONS] [NAMES]...
 
 ## `tara add`
 
-Pick and install catalog artifacts (skills, agents, prompts, instructions).
+Pick and install catalog artifacts (skills, agents, prompts, instructions, hooks).
 
 **Usage**:
 
@@ -222,6 +223,26 @@ $ tara new [OPTIONS] [KIND] [NAME]
 
 **Options**:
 
+* `--help`: Show this message and exit.
+
+## `tara rebuild`
+
+Reconstruct the Tara-managed setup from .tara/config.toml.
+
+This is the upgrade path after installing a new Tara version. Existing files are
+previewed and confirmed interactively; non-interactive collisions are skipped unless
+``--force`` is explicit.
+
+**Usage**:
+
+```console
+$ tara rebuild [OPTIONS]
+```
+
+**Options**:
+
+* `-n, --dry-run`: Preview without writing.
+* `-f, --force`: Allow overwriting existing files when confirmation is unavailable.
 * `--help`: Show this message and exit.
 
 ## `tara sync`
@@ -351,7 +372,11 @@ Phase 2 — indexed skills: for installed packages with a known official skill
 repo in Tara's index (e.g. duckdb, streamlit), fetches and installs those
 skills automatically.
 
-Phase 3 — docs fallback (--docs, on by default): for packages still without
+Phase 3 — scoped instructions: installs a bundled .instructions.md whose
+index entry names an installed package (e.g. dagster), unless the repo
+already has that file.
+
+Phase 4 — docs fallback (--docs, on by default): for packages still without
 any skill, queries PyPI for a docs URL and probes for llms.txt. Found sources
 are wired into the mcpdoc MCP server in .mcp.json.
 
