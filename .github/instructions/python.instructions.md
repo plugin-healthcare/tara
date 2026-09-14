@@ -9,7 +9,11 @@ applyTo: "**/*.py"
   short and to the point: purpose, key decisions, and how it works, plus
   args/returns/raises. Defer internal detail to a comment on its own line above the
   code (never inline/trailing).
-- Prefer `pathlib.Path` over `os.path`. No bare `except:` — catch specific exceptions.
+- Prefer `pathlib.Path` over `os.path`. No bare `except:`; catch specific exceptions.
 - Use `logging`, never `print()`, in library/application code.
 - Tabular data: prefer `polars` (lazy `pl.LazyFrame`) over `pandas`.
+- Keep frames lazy until the final step. Do not loop over rows or pull unbounded data
+  into Python collections.
+- Use absolute imports. Keep `__init__.py` limited to imports and its module docstring.
+- Write pytest tests as plain functions and mirror the source layout under `tests/`.
 - Run `uv run ruff check --fix && uv run ruff format` before considering a change done.

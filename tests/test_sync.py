@@ -63,7 +63,31 @@ def test_sync_skips_core_managed_skill(repo, tmp_path, patch_discover):
 
     assert result.skipped == ["writing-adrs"]
     assert result.added == []
-    assert result.warnings  # a warning explains why it was skipped
+    assert result.skipped_reasons["writing-adrs"] == "core catalog"
     # Core file is untouched and sync never recorded ownership of it.
     assert (core / "SKILL.md").read_text() == "core content, do not overwrite\n"
     assert "writing-adrs" not in sync_mod.read_lock()
+
+
+def test_sync_reports_a_git_managed_skill_as_git_managed(
+    repo, tmp_path, patch_discover
+):
+    """A skill in skills.toml came from a git repo, not Tara's own catalog."""
+    installed = repo / sync_mod.SKILLS_DIR / "developing-with-streamlit"
+    installed.mkdir(parents=True)
+    (installed / "SKILL.md").write_text("from the streamlit theme\n")
+    (repo / ".tara").mkdir(exist_ok=True)
+    (repo / ".tara" / "skills.toml").write_text(
+        "[skills.developing-with-streamlit]\n"
+        'repo = "https://github.com/streamlit/agent-skills"\n'
+        'path = "developing-with-streamlit"\n'
+        'ref = "main"\n'
+    )
+
+    md = _make_library_skill(tmp_path / "lib", "developing-with-streamlit")
+    patch_discover([md])
+
+    result = sync_mod.sync(all_packages=True)
+
+    assert result.skipped == ["developing-with-streamlit"]
+    assert result.skipped_reasons["developing-with-streamlit"] == "git-managed"

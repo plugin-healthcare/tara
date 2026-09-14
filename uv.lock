@@ -394,10 +394,11 @@ wheels = [
 
 [[package]]
 name = "tara"
-version = "1.0.0"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "questionary" },
     { name = "typer" },
 ]
@@ -412,7 +413,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "questionary", specifier = ">=2.0" },
     { name = "typer", specifier = ">=0.12" },
 ]

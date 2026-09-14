@@ -37,6 +37,24 @@ def test_install_agent_copies_into_repo(repo):
     assert "Yoda" in installed.read_text()
 
 
+def test_install_instruction_skips_a_symlinked_destination_directory(repo):
+    outside = repo / "outside"
+    outside.mkdir()
+    instructions = repo / ".github" / "instructions"
+    instructions.parent.mkdir()
+    instructions.symlink_to(outside, target_is_directory=True)
+    item = next(
+        item
+        for item in catalog.catalog(["instructions"])["instructions"]
+        if item.name == "markdown.instructions.md"
+    )
+
+    line = catalog.install_item(item)
+
+    assert "symlink" in line
+    assert not (outside / item.name).exists()
+
+
 def test_catalog_lists_mcp_servers(repo):
     items = catalog.catalog(["mcp"])["mcp"]
     names = [it.name for it in items]
@@ -143,3 +161,26 @@ def test_install_bundled_skill_overwrites_existing(repo, tmp_path, monkeypatch):
 
     catalog.install_item(item)
     assert not stale.exists()
+
+
+def test_instructions_index_lists_package_triggers():
+    assert catalog.instructions_index()["dagster.instructions.md"] == ["dagster"]
+
+
+def test_instructions_for_packages_matches_installed(repo):
+    items = catalog.instructions_for_packages({"Dagster"})
+
+    assert [it.name for it in items] == ["dagster.instructions.md"]
+    assert items[0].kind == "instructions"
+
+
+def test_instructions_for_packages_ignores_unrelated(repo):
+    assert catalog.instructions_for_packages({"requests"}) == []
+
+
+def test_instructions_for_packages_skips_a_file_already_in_the_repo(repo):
+    dest = repo / ".github" / "instructions"
+    dest.mkdir(parents=True)
+    (dest / "dagster.instructions.md").write_text("my own version\n")
+
+    assert catalog.instructions_for_packages({"dagster"}) == []
