@@ -53,6 +53,31 @@ def test_wrapped_list_item_continuation_is_flagged():
     assert violations[0].line == 1
 
 
+def test_consecutive_bold_label_lines_are_not_flagged():
+    text = (
+        "**Correctness** — bugs, edge cases, error handling gaps\n"
+        "**Clarity** — naming, complexity, readability\n"
+        "**Tests** — missing coverage for the changed behaviour\n"
+    )
+    assert markdown_lint.find_violations(text) == []
+
+
+def test_consecutive_bold_colon_label_lines_are_not_flagged():
+    text = (
+        "**Correctness**: bugs, edge cases, error handling gaps\n"
+        "**Clarity**: naming, complexity, readability; clear over clever\n"
+        "**Tests**: behaviour covered once, tests independent, the gate would pass\n"
+    )
+    assert markdown_lint.find_violations(text) == []
+
+
+def test_consecutive_label_colon_lines_are_not_flagged():
+    text = (
+        "Date: {date}\nSeverity: P{1-4}\nStatus: Draft | Review | Closed\nAuthor(s):\n"
+    )
+    assert markdown_lint.find_violations(text) == []
+
+
 def test_fenced_code_block_is_ignored():
     text = (
         "```text\n"

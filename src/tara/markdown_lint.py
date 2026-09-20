@@ -3,7 +3,9 @@
 The house style is one sentence per source line, however long. A "hard wrap"
 is a paragraph or list-item line that doesn't end in terminal punctuation and
 is immediately followed by another non-blank line continuing the same block.
-Fenced code, tables, and headings are never checked.
+Fenced code, tables, and headings are never checked. Lines that open with a
+bold term (``**Label**``) or a ``Label:`` prefix are treated like list items:
+each one is its own unit, never a continuation of the line before it.
 
 This is a heuristic, not a parser: it flags the common case (an editor or
 model wrapping prose at ~80-100 columns) and stays quiet on legitimately long
@@ -23,6 +25,7 @@ _HEADING = re.compile(r"^#{1,6}\s")
 _TABLE_ROW = re.compile(r"^\|")
 _HTML_COMMENT = re.compile(r"^<!--.*-->$")
 _LIST_MARKER = re.compile(r"^(\s*)([-*+]|\d+[.)])\s+")
+_STANDALONE_LABEL = re.compile(r"^(\*\*[^*]+\*\*:?|[A-Z][\w() -]*:)(\s|$)")
 _TERMINAL = re.compile(r"[.!?:;)\]][\"')\]`*_]*$")
 
 
@@ -68,8 +71,12 @@ def find_violations(text: str, path: Path = Path("<string>")) -> list[Violation]
             block_ends_here = True
             continue
         # A new list item starts a fresh unit, even without a blank line
-        # before it, so it never counts as a hard-wrap continuation.
-        starts_list_item = bool(_LIST_MARKER.match(raw_line))
+        # before it, so it never counts as a hard-wrap continuation. A line
+        # that opens with a bold term or a "Label:" prefix is a definition-
+        # list-style item and gets the same treatment.
+        starts_list_item = bool(_LIST_MARKER.match(raw_line)) or bool(
+            _STANDALONE_LABEL.match(stripped)
+        )
         if not block_ends_here and not starts_list_item:
             violations.append(Violation(path, prev_index, prev_line))
         block_ends_here = bool(_TERMINAL.search(stripped))
