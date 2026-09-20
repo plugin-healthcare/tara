@@ -1,6 +1,9 @@
 # Post-mortem: {title}
 
-Date: {date} Severity: P{1-4} Status: Draft | Review | Closed Author(s):
+Date: {date}
+Severity: P{1-4}
+Status: Draft | Review | Closed
+Author(s):
 
 > This is a blameless post-mortem.
 The goal is to understand what happened and prevent recurrence — not to assign fault.
