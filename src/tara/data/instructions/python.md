@@ -11,6 +11,7 @@ Project setup, dependency hygiene, and the tooling baseline live in the `structu
   Keep them short and to the point -- purpose, key decisions, and how it works, plus args/returns/raises.
   Defer internal detail to a comment; don't pad the docstring.
 - Comments carry the non-obvious *why*, one point each, on their own line above the code, never trailing/inline.
+  Comments and docstrings describe current behavior, not a changelog or a history of how the code got here; that belongs in the changelog or an ADR.
 - Prefer `pathlib` over `os.path`.
   Log via `logging` (`getLogger(__name__)`), never `print()`.
 - No bare `except`; catch specific exceptions.

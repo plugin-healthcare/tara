@@ -122,6 +122,17 @@ def test_consecutive_html_comments_are_not_flagged():
     assert markdown_lint.find_violations(text) == []
 
 
+def test_multiline_html_comment_is_ignored():
+    text = (
+        "<!--\n"
+        "This spans several lines without terminal punctuation\n"
+        "and closes here\n"
+        "-->\n"
+        "Body sentence.\n"
+    )
+    assert markdown_lint.find_violations(text) == []
+
+
 def test_check_file_reports_path_and_line(tmp_path: Path):
     md = tmp_path / "doc.md"
     md.write_text(

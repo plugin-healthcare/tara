@@ -48,8 +48,5 @@ repos:
         entry: uv run python -m tara.markdown_lint
         language: system
         files: \.(md|mdx|qmd)$
-        # docs/cli.md is generated from Typer help text sourced from Python
-        # docstrings, which follow the docstring wrapping convention instead.
-        # .agents/ holds dated handover/plan logs: point-in-time snapshots,
-        # not living docs to reflow retroactively.
+        # docs/cli.md is generated from Python docstrings.
         exclude: ^(\.github/skills/|\.agents/|docs/cli\.md$)

@@ -46,6 +46,6 @@ repos:
         entry: uv run python -m tara.markdown_lint
         language: system
         files: \.(md|mdx|qmd)$
-        # .agents/ holds dated handover/plan logs: point-in-time snapshots,
-        # not living docs to reflow retroactively.
+        # Also exclude any markdown your repo generates from another source
+        # (e.g. CLI docs from docstrings).
         exclude: ^(\.github/skills/|\.agents/)

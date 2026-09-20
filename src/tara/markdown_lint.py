@@ -5,7 +5,8 @@ is a paragraph or list-item line that doesn't end in terminal punctuation and
 is immediately followed by another non-blank line continuing the same block.
 Fenced code, tables, and headings are never checked. Lines that open with a
 bold term (``**Label**``) or a ``Label:`` prefix are treated like list items:
-each one is its own unit, never a continuation of the line before it.
+each one is its own unit, never a continuation of the line before it. HTML
+comments are ignored, whether they close on the same line or span several.
 
 This is a heuristic, not a parser: it flags the common case (an editor or
 model wrapping prose at ~80-100 columns) and stays quiet on legitimately long
@@ -24,6 +25,8 @@ _FRONTMATTER = re.compile(r"^---\s*$")
 _HEADING = re.compile(r"^#{1,6}\s")
 _TABLE_ROW = re.compile(r"^\|")
 _HTML_COMMENT = re.compile(r"^<!--.*-->$")
+_HTML_COMMENT_OPEN = re.compile(r"^<!--")
+_HTML_COMMENT_CLOSE = re.compile(r"-->")
 _LIST_MARKER = re.compile(r"^(\s*)([-*+]|\d+[.)])\s+")
 _STANDALONE_LABEL = re.compile(r"^(\*\*[^*]+\*\*:?|[A-Z][\w() -]*:)(\s|$)")
 _TERMINAL = re.compile(r"[.!?:;)\]][\"')\]`*_]*$")
@@ -43,7 +46,8 @@ def find_violations(text: str, path: Path = Path("<string>")) -> list[Violation]
     violations: list[Violation] = []
     in_code = False
     in_frontmatter = False
-    block_ends_here = True  # true once no continuation line can attach
+    in_html_comment = False
+    block_ends_here = True
     prev_line = ""
     prev_index = 0
     for index, raw_line in enumerate(text.splitlines(), start=1):
@@ -57,6 +61,11 @@ def find_violations(text: str, path: Path = Path("<string>")) -> list[Violation]
                 in_frontmatter = False
             block_ends_here = True
             continue
+        if in_html_comment:
+            if _HTML_COMMENT_CLOSE.search(stripped):
+                in_html_comment = False
+            block_ends_here = True
+            continue
         if _FENCE.match(stripped):
             in_code = not in_code
             block_ends_here = True
@@ -66,14 +75,13 @@ def find_violations(text: str, path: Path = Path("<string>")) -> list[Violation]
         if not stripped or _HEADING.match(stripped) or _TABLE_ROW.match(stripped):
             block_ends_here = True
             continue
-        # A self-contained HTML comment never continues onto the next line.
         if _HTML_COMMENT.match(stripped):
             block_ends_here = True
             continue
-        # A new list item starts a fresh unit, even without a blank line
-        # before it, so it never counts as a hard-wrap continuation. A line
-        # that opens with a bold term or a "Label:" prefix is a definition-
-        # list-style item and gets the same treatment.
+        if _HTML_COMMENT_OPEN.match(stripped):
+            in_html_comment = True
+            block_ends_here = True
+            continue
         starts_list_item = bool(_LIST_MARKER.match(raw_line)) or bool(
             _STANDALONE_LABEL.match(stripped)
         )
