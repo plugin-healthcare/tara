@@ -20,10 +20,8 @@ We want to support more tools (opencode, Claude Code, goose) without duplicating
 
 Split the two concerns:
 
-- **The package is tool-agnostic.**
-  Content and structure under `tara/data/` use neutral names and assume no tool.
-- **Placement is tool-specific.**
-  Writing the content into a repo is where a tool's conventions apply.
+- **The package is tool-agnostic.** Content and structure under `tara/data/` use neutral names and assume no tool.
+- **Placement is tool-specific.** Writing the content into a repo is where a tool's conventions apply.
   Keep it generic where beneficial (reference a shared core file instead of duplicating it) and tool-specific only where a tool requires it.
 
 Only the GitHub Copilot writer is implemented now (`.github/copilot-instructions.md` plus catalog files under `.github/`).

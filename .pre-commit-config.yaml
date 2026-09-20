@@ -40,3 +40,16 @@ repos:
     rev: v1.26.1
     hooks:
       - id: zizmor
+
+  - repo: local
+    hooks:
+      - id: markdown-wrap
+        name: markdown one-sentence-per-line
+        entry: uv run python -m tara.markdown_lint
+        language: system
+        files: \.(md|mdx|qmd)$
+        # docs/cli.md is generated from Typer help text sourced from Python
+        # docstrings, which follow the docstring wrapping convention instead.
+        # .agents/ holds dated handover/plan logs: point-in-time snapshots,
+        # not living docs to reflow retroactively.
+        exclude: ^(\.github/skills/|\.agents/|docs/cli\.md$)

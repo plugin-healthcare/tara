@@ -41,3 +41,11 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: markdown-wrap
+        name: markdown one-sentence-per-line
+        entry: uv run python -m tara.markdown_lint
+        language: system
+        files: \.(md|mdx|qmd)$
+        # .agents/ holds dated handover/plan logs: point-in-time snapshots,
+        # not living docs to reflow retroactively.
+        exclude: ^(\.github/skills/|\.agents/)

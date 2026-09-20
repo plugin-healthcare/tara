@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A `markdown-wrap` pre-commit hook (`tara.markdown_lint`) in the standard `.pre-commit-config.yaml`, failing on hard-wrapped markdown lines. Coding agents and editors default to wrapping prose at a column width like code; this repo's convention is one sentence per source line instead, so the hook catches the wrap before it's committed.
+
+### Changed
+
+- The `markdown.instructions.md` catalog instructions now state the one-sentence-per-line rule explicitly and reference the `markdown-wrap` hook that enforces it.
+
 ## [1.0.0] - 2026-07-27
 
 Initial release of Tara, an agentic engineering toolkit that installs and maintains the guardrails your agent reads while you code (Copilot-first, with opencode supported).
