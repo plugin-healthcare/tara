@@ -4,9 +4,8 @@ agent: agent
 tools: [read, search]
 ---
 
-Review phase of the flow. Give structured feedback against the story's acceptance
-criteria, Definition of Done, and any ADRs it references, plus the fixed flow in
-`.github/copilot-instructions.md`.
+Review phase of the flow.
+Give structured feedback against the story's acceptance criteria, Definition of Done, and any ADRs it references, plus the fixed flow in `.github/copilot-instructions.md`.
 
 **Correctness**: bugs, edge cases, error handling gaps
 **Clarity**: naming, complexity, readability; clear over clever
@@ -18,6 +17,4 @@ criteria, Definition of Done, and any ADRs it references, plus the fixed flow in
 Format as a prioritised list: `[blocker]`, `[suggestion]`, `[nit]`.
 End with a one-line verdict: is the Definition of Done met, or what is missing.
 
-Finally, file your review as `.agents/review/YYYYMMDDHHMM_<short-descriptive-title>.md`,
-add a row to
-`.agents/review/index.md`, and note the hand-off in `.agents/memory/`.
+Finally, file your review as `.agents/review/YYYYMMDDHHMM_<short-descriptive-title>.md`, add a row to `.agents/review/index.md`, and note the hand-off in `.agents/memory/`.

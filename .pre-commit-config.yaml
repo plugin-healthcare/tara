@@ -40,3 +40,13 @@ repos:
     rev: v1.26.1
     hooks:
       - id: zizmor
+
+  - repo: local
+    hooks:
+      - id: markdown-wrap
+        name: markdown one-sentence-per-line
+        entry: uv run python -m tara.markdown_lint
+        language: system
+        files: \.(md|mdx|qmd)$
+        # docs/cli.md is generated from Python docstrings.
+        exclude: ^(\.github/skills/|\.agents/|docs/cli\.md$)

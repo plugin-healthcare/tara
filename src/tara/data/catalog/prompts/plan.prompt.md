@@ -10,4 +10,5 @@ Before writing any code, produce a concise implementation plan:
 3. Identify edge cases, unknowns, or risks.
 4. Propose the sequence of steps.
 
-Do not write code yet. Wait for confirmation before proceeding.
+Do not write code yet.
+Wait for confirmation before proceeding.
