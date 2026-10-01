@@ -1,0 +1,24 @@
+{
+  "source": "YYYYMMDDHHMM_epics-<repo>.md",
+  "repo": "<org>/<repo>",
+  "owner": "<org>",
+  "project_number": 0,
+  "project_id": "PVT_...",
+  "blob_prefix": "https://github.com/<org>/<repo>/blob/main/",
+  "epic_title": "EPIC - {prefix} - {code} {title}",
+  "initiative_footer": "De epics van dit initiative hangen eronder als sub-issue.",
+  "issue_types": {"initiative": "IT_...", "epic": "IT_..."},
+  "default_fields": {
+    "<status field id>": "<backlog option id>",
+    "<product field id>": "<default product option id>"
+  },
+  "sections": {
+    "Core": {"header": "## Core", "prefix": "CORE", "initiative_title": "INITIATIVE - <repo> Core"},
+    "<app>": {
+      "header": "## <app>",
+      "prefix": "<APP>",
+      "initiative_title": "INITIATIVE - <app>",
+      "fields": {"<product field id>": "<app product option id>"}
+    }
+  }
+}
