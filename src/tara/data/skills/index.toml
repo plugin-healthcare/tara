@@ -81,3 +81,10 @@ repo = "https://github.com/github/gh-stack"
 path = "skills"
 ref = "main"
 description = "GitHub's gh-stack CLI skill for creating, viewing, and managing stacked pull requests."
+
+[sets.superpowers]
+repo = "https://github.com/obra/superpowers"
+path = "skills"
+ref = "main"
+include = ["dispatching-parallel-agents", "systematic-debugging", "test-driven-development", "verification-before-completion"]
+description = "A selection of Obra's Superpowers skills for software development."
