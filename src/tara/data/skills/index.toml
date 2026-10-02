@@ -86,5 +86,5 @@ description = "GitHub's gh-stack CLI skill for creating, viewing, and managing s
 repo = "https://github.com/obra/superpowers"
 path = "skills"
 ref = "main"
-include = ["brainstorming", "dispatching-parallel-agents", "executing-plans", "systematic-debugging", "test-driven-development", "verification-before-completion", "writing-plans"]
+include = ["dispatching-parallel-agents", "systematic-debugging", "test-driven-development", "verification-before-completion"]
 description = "A selection of Obra's Superpowers skills for software development."
