@@ -1,9 +1,7 @@
 # Story: {title}
 
 ## User Story
-As a **{role}**,
-I want to **{goal}**,
-so that **{benefit}**.
+As a **{role}**, I want to **{goal}**, so that **{benefit}**.
 
 ## Acceptance Criteria
 - [ ] Given … when … then …

@@ -5,9 +5,7 @@ description: "Use when creating or structuring a Streamlit application: the entr
 
 # Structuring Streamlit apps
 
-The canonical layout for a Streamlit application: one entrypoint, a `pages/` folder
-for extra pages, config under `.streamlit/`, and business logic pulled out of the UI
-so it can be tested without a running app.
+The canonical layout for a Streamlit application: one entrypoint, a `pages/` folder for extra pages, config under `.streamlit/`, and business logic pulled out of the UI so it can be tested without a running app.
 
 ## Create it with uv
 
@@ -48,33 +46,26 @@ Then arrange the layout below and run it with `uv run streamlit run app.py`.
 
 ## The three layers: views glue, components render, backend computes
 
-**Never build logic or components inside `pages/views`.** A view exists only to glue
-things together: read the user's inputs, call `backend` for the data and numbers,
-pass them to a `components` function to render, and lay it out with `st.*`. That is
-all a view does.
+**Never build logic or components inside `pages/views`.** A view exists only to glue things together: read the user's inputs, call `backend` for the data and numbers, pass them to a `components` function to render, and lay it out with `st.*`.
+That is all a view does.
 
-- **`backend/`**: data retrieval and calculations. Pure, typed functions with no
-  `st.*` calls and no plotting. This is the logic layer, and it is where the real
-  work lives.
-- **`components/`**: reusable front-end pieces and plots. A plot function takes data
-  (from `backend`) and returns a figure or chart; a component renders a reusable bit
-  of UI. Keep data fetching and business rules out of here, that is `backend`'s job.
-- **`pages/`**: glue only. No transforms, no computations, no inline
-  components. If you are writing one in a view file, it belongs in `backend` (logic)
-  or `components` (UI/plot).
+- **`backend/`**: data retrieval and calculations.
+  Pure, typed functions with no `st.*` calls and no plotting.
+  This is the logic layer, and it is where the real work lives.
+- **`components/`**: reusable front-end pieces and plots.
+  A plot function takes data (from `backend`) and returns a figure or chart; a component renders a reusable bit of UI.
+  Keep data fetching and business rules out of here, that is `backend`'s job.
+- **`pages/`**: glue only.
+  No transforms, no computations, no inline components.
+  If you are writing one in a view file, it belongs in `backend` (logic) or `components` (UI/plot).
 
 Why: a view with logic or components baked in cannot be tested and cannot be reused.
-When calculations sit in `backend/` you unit test them with `pytest` and no running
-app; when plots and widgets sit in `components/` any view (or another app) can reuse
-them.
+When calculations sit in `backend/` you unit test them with `pytest` and no running app; when plots and widgets sit in `components/` any view (or another app) can reuse them.
 
-- Cache expensive calls with `@st.cache_data` / `@st.cache_resource` at the view
-  boundary, not inside the pure `backend/` functions.
-- Use `@st.fragment` and `st.form` to scope reruns: fragments rerun in isolation for
-  partial updates, and forms batch widget input into a single submit. Both cut
-  full-script reruns and keep the app responsive.
-- Multipage: files under `pages/` become sidebar entries automatically; prefix
-  with a number to order them.
+- Cache expensive calls with `@st.cache_data` / `@st.cache_resource` at the view boundary, not inside the pure `backend/` functions.
+- Use `@st.fragment` and `st.form` to scope reruns: fragments rerun in isolation for partial updates, and forms batch widget input into a single submit.
+  Both cut full-script reruns and keep the app responsive.
+- Multipage: files under `pages/` become sidebar entries automatically; prefix with a number to order them.
 - `.streamlit/config.toml` holds theme and server config; do not hardcode it.
 
 ## Conventions
@@ -83,4 +74,5 @@ them.
 - Ship sample data in `data/` so `uv run streamlit run app.py` works immediately.
 - Test `backend/` with `uv run pytest`; run the app to verify the views.
 
-Never commit; the developer reviews and commits. You scaffold and arrange the files.
+Never commit; the developer reviews and commits.
+You scaffold and arrange the files.

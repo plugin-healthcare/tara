@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- A `markdown-wrap` pre-commit hook (`tara.markdown_lint`) in the standard `.pre-commit-config.yaml`, failing on hard-wrapped markdown lines. Coding agents and editors default to wrapping prose at a column width like code; this repo's convention is one sentence per source line instead, so the hook catches the wrap before it's committed.
 - `tara rebuild` reconstructs Tara-managed core files, agent docs, catalog selections, standards scaffolding, managed skills, and configured integrations from `.tara/config.toml`. Legacy configs migrate only catalog artifacts whose installed content Tara can identify, dry runs write nothing, and collisions require `--force`.
 - Catalog instructions for Python (`python.instructions.md`, correct and wrong examples for imports, typing, settings, errors, Polars, and tests), Dagster, and deployment.
 - Catalog skill `managing-github-issues` provides tightened guidance for bulk issue creation, sub-issue hierarchy, and project board fields through `gh`.
@@ -16,9 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The `markdown.instructions.md` catalog instructions now state the one-sentence-per-line rule explicitly and reference the `markdown-wrap` hook that enforces it.
 - `tara audit` warns when a `SKILL.md` exceeds 200 lines and reports each skill's total file count and size.
 - Claude Code commands now keep translated frontmatter but `@`-import their canonical `.github/prompts/` body instead of copying it. Claude subagent bodies remain generated copies because Claude Code does not expand imports in agent definitions.
-
 - `markdown.instructions.md` covers `.mdx` and `.qmd`, and states the prose rules that were previously implicit: no em dashes ever, full sentences, no contrastive tic, no colon-into-fragment construction, and no overuse of bold, italics, or emoji.
 
 ## [1.1.0] - 2026-08-26

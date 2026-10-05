@@ -41,3 +41,11 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: markdown-wrap
+        name: markdown one-sentence-per-line
+        entry: uv run python -m tara.markdown_lint
+        language: system
+        files: \.(md|mdx|qmd)$
+        # Also exclude any markdown your repo generates from another source
+        # (e.g. CLI docs from docstrings).
+        exclude: ^(\.github/skills/|\.agents/)

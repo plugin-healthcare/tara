@@ -4,9 +4,8 @@ applyTo: "**/*.md,**/*.mdx,**/*.qmd"
 
 # Markdown conventions
 
-The general writing style lives in `.github/copilot-instructions.md`. For how to
-document audience, structure, diagrams, and keeping docs current, use the
-`writing-documentation` skill.
+The general writing style lives in `.github/copilot-instructions.md`.
+For how to document audience, structure, diagrams, and keeping docs current, use the `writing-documentation` skill.
 
 - Write functional, precise prose. Focus on content, not decoration.
 - Use headings and lists to structure content.
@@ -17,6 +16,7 @@ document audience, structure, diagrams, and keeping docs current, use the
 - Do not collapse a sentence into a colon followed by a noun-phrase fragment.
 - Avoid the "not X, but Y" and "not just X" contrastive tic.
 - Do not overuse bold, italics, or emoji.
-- Write one sentence per source line. Skills and agent-only instruction files may
-  wrap at a character column to make token cost easier to estimate.
+- Write one sentence per source line, however long.
+  Never hard-wrap a sentence across lines at a column width.
+  The `markdown-wrap` pre-commit hook (installed via `tara standards`) enforces this.
 - Check the site configuration before suggesting structure under `docs/`.

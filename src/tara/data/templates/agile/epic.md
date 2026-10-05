@@ -4,7 +4,8 @@
 <!-- One sentence: what outcome does this epic deliver and for whom? -->
 
 ## Background
-<!-- Why now? What problem or opportunity drives this? -->
+<!-- Why now?
+What problem or opportunity drives this? -->
 
 ## Scope
 ### In scope
