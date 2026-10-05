@@ -5,9 +5,8 @@ description: "Python file conventions with correct and wrong examples: imports, 
 
 # Python file conventions
 
-The prose version of these rules lives in `.github/copilot-instructions.md`; project
-setup and the tooling baseline live in the `structuring-python-packages` skill. This
-file is the file-scoped version with the correct and wrong shapes side by side.
+The prose version of these rules lives in `.github/copilot-instructions.md`; project setup and the tooling baseline live in the `structuring-python-packages` skill.
+This file is the file-scoped version with the correct and wrong shapes side by side.
 
 ## Imports
 
@@ -126,19 +125,18 @@ conn.execute(f"SELECT * FROM {user_input}")
 - Use a class to group cohesive functions over shared data, not to hold mutable state.
 - Return values instead of mutating arguments.
 - No logic in `__init__.py`; imports and a module docstring only.
-- Shared helpers live in a package-level `utils` module, not inside a submodule that
-  happens to have needed them first.
+- Shared helpers live in a package-level `utils` module, not inside a submodule that happens to have needed them first.
 
 ## Polars
 
-- Stay lazy. Use `pl.LazyFrame` and don't call `.collect()` until the final step or
-  until an operation strictly requires it.
+- Stay lazy.
+  Use `pl.LazyFrame` and don't call `.collect()` until the final step or until an operation strictly requires it.
 - Don't take or return `DataFrame` where `LazyFrame` works.
-- Don't read large files into memory. Use `scan_parquet`, `scan_csv`, and `sink_parquet`
-  for out-of-core work.
+- Don't read large files into memory.
+  Use `scan_parquet`, `scan_csv`, and `sink_parquet` for out-of-core work.
 - Don't loop over rows or columns. Batch into a single `with_columns` or `select`.
-- Don't pull rows or cells into Python lists. The round trip out of Arrow is expensive
-  and unbounded when no limit is set.
+- Don't pull rows or cells into Python lists.
+  The round trip out of Arrow is expensive and unbounded when no limit is set.
 
 ## Testing
 
