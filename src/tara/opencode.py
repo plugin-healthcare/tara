@@ -148,8 +148,8 @@ def port_config(dry_run: bool = False, force: bool = False) -> str:
     """
     root = repo_root()
     dest = root / OPENCODE_CONFIG
-    if dest.is_symlink():
-        return f"  skipped {OPENCODE_CONFIG} (destination is a symlink, left untouched)"
+    if reason := generate.unsafe_reason(dest):
+        return f"  skipped {OPENCODE_CONFIG} ({reason}, left untouched)"
     config: dict[str, object] = {}
     if dest.exists():
         try:
@@ -267,7 +267,7 @@ def port_all(dry_run: bool = False, force: bool = False) -> list[tuple[str, list
 def _remove_config(dry_run: bool) -> str | None:
     """Remove Tara-managed OpenCode keys while preserving user settings."""
     path = repo_root() / OPENCODE_CONFIG
-    if not path.is_file() or path.is_symlink():
+    if generate.unsafe_reason(path) or not path.is_file():
         return None
     try:
         config = json.loads(path.read_text(encoding="utf-8"))

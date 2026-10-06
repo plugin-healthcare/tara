@@ -16,6 +16,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from tara import generate
 from tara.core import data_path, repo_root
 
 SETTINGS = Path(".claude") / "settings.json"
@@ -71,33 +72,33 @@ def _read_settings(path: Path) -> dict[str, Any]:
     return data
 
 
-def _actions(entry: object) -> set[str]:
-    """The command and prompt strings one matcher entry runs.
+def _action(hook: object) -> str | None:
+    """The command or prompt string one hook runs, if it has one."""
+    if not isinstance(hook, dict):
+        return None
+    for key in ("command", "prompt"):
+        value = hook.get(key)
+        if isinstance(value, str):
+            return value
+    return None
 
-    Identity is the action text, because that is what actually executes. Two
-    entries carrying the same command are the same hook however they are
-    matched or spelled.
-    """
+
+def _hooks(entry: object) -> list[object]:
     if not isinstance(entry, dict):
-        return set()
-    out: set[str] = set()
-    entries = entry.get("hooks", [])
-    if not isinstance(entries, list):
-        return out
-    for hook in entries:
-        if isinstance(hook, dict):
-            for key in ("command", "prompt"):
-                value = hook.get(key)
-                if isinstance(value, str):
-                    out.add(value)
-    return out
+        return []
+    hooks = entry.get("hooks", [])
+    return list(hooks) if isinstance(hooks, list) else []
 
 
-def _installed_actions(settings: dict[str, Any], event: str) -> set[str]:
-    entries = settings.get("hooks", {}).get(event, [])
-    if not isinstance(entries, list):
-        return set()
-    return {action for entry in entries for action in _actions(entry)}
+def _installed_actions(entries: list[object], matcher: object) -> set[str]:
+    """Actions already configured for ``matcher`` in one event's entries."""
+    return {
+        action
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("matcher") == matcher
+        for hook in _hooks(entry)
+        if (action := _action(hook)) is not None
+    }
 
 
 def merge(
@@ -105,9 +106,9 @@ def merge(
 ) -> tuple[dict[str, Any], int]:
     """Merge a bundle's events into ``settings``. Returns the result and how many entries were added.
 
-    Appends whole matcher entries; an existing entry is never edited, so a
-    developer's own hook keeps running exactly as written. An entry whose
-    actions are all present already is skipped, which makes re-install a no-op.
+    A hook is identified by its matcher and its command or prompt. Existing
+    entries are never edited: an entry with missing hooks is appended holding
+    only those hooks, and an entry whose hooks all exist is skipped.
     """
     merged = json.loads(json.dumps(settings))  # deep copy, JSON in and JSON out
     events = merged.setdefault("hooks", {})
@@ -118,13 +119,17 @@ def merge(
         existing = events.setdefault(event, [])
         if not isinstance(existing, list):
             raise HookError(f"{SETTINGS.as_posix()} has a non-list '{event}' hook list")
-        present = _installed_actions(merged, event)
         for entry in entries:
-            actions = _actions(entry)
-            if actions and actions <= present:
+            matcher = entry.get("matcher") if isinstance(entry, dict) else None
+            present = _installed_actions(existing, matcher)
+            hooks = _hooks(entry)
+            missing = [hook for hook in hooks if _action(hook) not in present]
+            if hooks and not missing:
                 continue
-            existing.append(entry)
-            present |= actions
+            if len(missing) == len(hooks):
+                existing.append(entry)
+            else:
+                existing.append({**entry, "hooks": missing})
             added += 1
     return merged, added
 
@@ -150,6 +155,8 @@ def install(name: str, dry_run: bool = False) -> str:
     """
     bundle = read_bundle(name)
     path = repo_root() / SETTINGS
+    if reason := generate.unsafe_reason(path):
+        raise HookError(f"refusing to write {SETTINGS.as_posix()}: {reason}")
     settings = _read_settings(path)
     merged, added = merge(settings, bundle)
     rel = SETTINGS.as_posix()

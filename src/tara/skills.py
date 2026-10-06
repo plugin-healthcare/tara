@@ -21,6 +21,7 @@ import tomllib
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from tara import generate
 from tara.core import data_path, repo_root
 
 SKILLS_DIR = Path(".github") / "skills"
@@ -252,6 +253,12 @@ def _clone(repo: str, ref: str | None, dest: str) -> str:
     return _git(["rev-parse", "HEAD"], cwd=dest)
 
 
+def _ensure_safe(dest: Path) -> None:
+    """Raise when ``dest`` is outside the repository or reached through a symlink."""
+    if reason := generate.unsafe_reason(dest):
+        raise SkillError(f"refusing to write {dest.name}: {reason}")
+
+
 def fetch_skill(source: SkillSource, dest: Path) -> str:
     """Clone the source, copy its skill subfolder to ``dest``; return the commit SHA."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -259,6 +266,7 @@ def fetch_skill(source: SkillSource, dest: Path) -> str:
         src = Path(tmp) / source.path
         if not (src / "SKILL.md").is_file():
             raise SkillError(f"no SKILL.md found at '{source.path}' in {source.repo}")
+        _ensure_safe(dest)
         if dest.exists():
             shutil.rmtree(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -344,6 +352,7 @@ def add_set(name: str) -> list[tuple[SkillSource, str]]:
             if not (src / "SKILL.md").is_file():
                 raise SkillError(f"no SKILL.md found at '{member_path}' in {sset.repo}")
             dest = repo_root() / SKILLS_DIR / member_name
+            _ensure_safe(dest)
             if dest.exists():
                 shutil.rmtree(dest)
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -424,6 +433,7 @@ def remove(name: str) -> None:
     if name not in manifest:
         raise SkillError(f"'{name}' is not in the manifest")
     dest = repo_root() / SKILLS_DIR / name
+    _ensure_safe(dest)
     if dest.exists():
         shutil.rmtree(dest)
     del manifest[name]

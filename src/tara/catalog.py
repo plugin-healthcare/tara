@@ -262,6 +262,8 @@ def install_item(item: CatalogItem) -> str:
     if item.kind == "skill":
         if item.source is not None:  # bundled skill: copy the tree, no manifest entry
             dest = repo_root() / skills.SKILLS_DIR / item.name
+            if reason := generate.unsafe_reason(dest):
+                return f"  skipped skill {item.name} ({reason}, left untouched)"
             if dest.exists():
                 shutil.rmtree(dest)
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -297,6 +299,8 @@ def install_item(item: CatalogItem) -> str:
 
     assert item.source is not None
     dest = repo_root() / _DEST[item.kind] / item.name
+    if reason := generate.unsafe_reason(dest):
+        return f"  skipped {item.kind} {item.name} ({reason}, left untouched)"
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(item.source, dest)
     return f"  {item.kind:7s} {item.name}"

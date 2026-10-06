@@ -410,3 +410,59 @@ def test_agent_permission_recognises_copilot_tool_names(tmp_path):
     src.write_text("---\ntools: [editFiles, runCommands]\n---\n\nBody.\n")
     fm, _ = frontmatter.parse(opencode.translate_agent(src))
     assert "permission" not in fm
+
+
+# ── containment ───────────────────────────────────────────────────────────────
+
+
+def _link_opencode_outside(repo, tmp_path_factory) -> Path:
+    outside = tmp_path_factory.mktemp("outside")
+    (repo / ".opencode").symlink_to(outside, target_is_directory=True)
+    return outside
+
+
+def test_port_agents_skips_a_symlinked_opencode_directory(repo, tmp_path_factory):
+    agents_dir = repo / opencode.COPILOT_AGENTS_DIR
+    agents_dir.mkdir(parents=True)
+    _make_agent(agents_dir, "yoda")
+    outside = _link_opencode_outside(repo, tmp_path_factory)
+
+    lines = opencode.port_agents()
+
+    assert any("symlink" in line for line in lines)
+    assert list(outside.iterdir()) == []
+
+
+def test_port_commands_skips_a_symlinked_opencode_directory(repo, tmp_path_factory):
+    outside = _link_opencode_outside(repo, tmp_path_factory)
+
+    lines = opencode.port_commands()
+
+    assert lines
+    assert all("symlink" in line for line in lines)
+    assert list(outside.iterdir()) == []
+
+
+def test_port_skills_skips_a_symlinked_opencode_directory(repo, tmp_path_factory):
+    _make_skill(repo / opencode.COPILOT_SKILLS_DIR, "demo")
+    outside = _link_opencode_outside(repo, tmp_path_factory)
+
+    lines = opencode.port_skills()
+
+    assert any("symlink" in line for line in lines)
+    assert list(outside.iterdir()) == []
+
+
+def test_remove_all_never_deletes_through_a_symlinked_opencode_directory(
+    repo, tmp_path_factory
+):
+    generate.record("opencode", "skills", ["demo"])
+    outside = _link_opencode_outside(repo, tmp_path_factory)
+    (outside / "agents").mkdir()
+    (outside / "agents" / "x.md").write_text(generate.marked("Outside."))
+    (outside / "skills" / "demo").mkdir(parents=True)
+
+    opencode.remove_all()
+
+    assert (outside / "agents" / "x.md").is_file()
+    assert (outside / "skills" / "demo").is_dir()

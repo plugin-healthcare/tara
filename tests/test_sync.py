@@ -91,3 +91,39 @@ def test_sync_reports_a_git_managed_skill_as_git_managed(
 
     assert result.skipped == ["developing-with-streamlit"]
     assert result.skipped_reasons["developing-with-streamlit"] == "git-managed"
+
+
+def _link_skills_outside(repo, tmp_path_factory) -> Path:
+    outside = tmp_path_factory.mktemp("outside")
+    skills_dir = repo / sync_mod.SKILLS_DIR
+    skills_dir.parent.mkdir(parents=True, exist_ok=True)
+    skills_dir.symlink_to(outside, target_is_directory=True)
+    return outside
+
+
+def test_sync_never_installs_through_a_symlinked_skills_directory(
+    repo, tmp_path, tmp_path_factory, patch_discover
+):
+    md = _make_library_skill(tmp_path / "lib", "foo")
+    patch_discover([md])
+    outside = _link_skills_outside(repo, tmp_path_factory)
+
+    result = sync_mod.sync(all_packages=True)
+
+    assert result.added == []
+    assert result.skipped == ["foo"]
+    assert "symlink" in result.skipped_reasons["foo"]
+    assert list(outside.iterdir()) == []
+
+
+def test_sync_never_removes_through_a_symlinked_skills_directory(
+    repo, tmp_path_factory, patch_discover
+):
+    sync_mod.write_lock({"foo": {"package": "pkg", "version": "1.0.0"}})
+    outside = _link_skills_outside(repo, tmp_path_factory)
+    (outside / "foo").mkdir()
+    patch_discover([])
+
+    sync_mod.sync(all_packages=True)
+
+    assert (outside / "foo").is_dir()

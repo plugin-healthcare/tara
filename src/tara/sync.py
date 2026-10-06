@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
-from tara import frontmatter
+from tara import frontmatter, generate
 from tara.core import repo_root
 from tara.skills import SKILLS_DIR, read_manifest
 
@@ -224,6 +224,8 @@ def _install_skill(skill: LibrarySkill) -> None:
 
 def _remove_skill(skill_name: str) -> None:
     dest = _dest(skill_name)
+    if generate.unsafe_reason(dest):
+        return
     if dest.exists():
         shutil.rmtree(dest)
 
@@ -313,6 +315,10 @@ def sync(root: Path | None = None, all_packages: bool = False) -> SyncResult:
     # Add or update.
     for name, skill in found.items():
         existing = lock.get(name)
+        if reason := generate.unsafe_reason(_dest(name)):
+            result.skipped.append(name)
+            result.skipped_reasons[name] = reason
+            continue
         if existing is None:
             # A skill dir we don't own already sits here: it came from a git
             # repo (`tara skill add`, a theme) or from Tara's own catalog via

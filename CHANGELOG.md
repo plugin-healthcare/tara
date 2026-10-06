@@ -22,6 +22,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Claude Code commands now keep translated frontmatter but `@`-import their canonical `.github/prompts/` body instead of copying it. Claude subagent bodies remain generated copies because Claude Code does not expand imports in agent definitions.
 - `markdown.instructions.md` covers `.mdx` and `.qmd`, and states the prose rules that were previously implicit: no em dashes ever, full sentences, no contrastive tic, no colon-into-fragment construction, and no overuse of bold, italics, or emoji.
 
+### Fixed
+
+- Generated writes, copies, and deletions now refuse a destination outside the repository or reached through a symlinked directory, such as a symlinked `.claude/` or `.github/skills/`.
+  Hooks, catalog installs, Claude and OpenCode generation, skills, and library-skill sync share one check.
+- Installing a hook bundle no longer skips a hook because the same command runs under a different matcher, and it appends only the hooks that are missing for a matcher.
+
 ## [1.1.0] - 2026-08-26
 
 ### Added
