@@ -97,6 +97,16 @@ def test_new_doc_adr_with_title(repo):
     assert adr.is_file()
 
 
+def test_new_runbook_writes_to_the_agent_doc_store(repo):
+    # GIVEN a repository
+    # WHEN a runbook is scaffolded
+    result = runner.invoke(app, ["new", "runbook", "release a new version"])
+    # THEN it lands in .agents/runbooks/ and not in docs/
+    assert result.exit_code == 0, result.output
+    assert (repo / ".agents" / "runbooks" / "release-a-new-version.md").is_file()
+    assert not (repo / "docs" / "runbooks").exists()
+
+
 def test_init_opencode_generates_from_copilot(repo):
     result = runner.invoke(app, ["init", "--tools", "opencode", "--all"])
     assert result.exit_code == 0, result.output

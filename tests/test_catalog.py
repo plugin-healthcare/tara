@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tara import catalog
+from tara import catalog, frontmatter
 
 
 def test_catalog_lists_bundled_agents(repo):
@@ -184,3 +184,22 @@ def test_instructions_for_packages_skips_a_file_already_in_the_repo(repo):
     (dest / "dagster.instructions.md").write_text("my own version\n")
 
     assert catalog.instructions_for_packages({"dagster"}) == []
+
+
+def test_catalog_offers_the_runbook_prompt(repo):
+    # GIVEN the bundled catalog
+    # WHEN the prompts are listed
+    names = [it.name for it in catalog.catalog(["prompts"])["prompts"]]
+    # THEN the runbook prompt is offered
+    assert "runbook.prompt.md" in names
+
+
+def test_runbook_instructions_apply_to_runbooks_only(repo):
+    # GIVEN the bundled runbook instructions
+    items = catalog.catalog(["instructions"])["instructions"]
+    item = next(it for it in items if it.name == "runbooks.instructions.md")
+    assert item.source is not None
+    # WHEN their frontmatter is read
+    fm, _ = frontmatter.parse(item.source.read_text())
+    # THEN they are scoped to the runbooks folder
+    assert fm["applyTo"] == ".agents/runbooks/**/*.md"

@@ -36,12 +36,20 @@ Don't skip a step; if one genuinely doesn't apply, say why.
 
 ## Agent working docs
 
-`tara init` creates `.agents/`, a git-tracked doc store: `plan/` for plans, `design/` for design docs, `review/` for code and maturity reviews, and `memory/` for session notes and handovers.
+`tara init` creates `.agents/`, a git-tracked doc store.
+Each folder belongs to a step in the workflow.
+
+- `design/`: before the plan, write a design doc when there are options to weigh, and record the choice and its trade-offs.
+- `plan/`: in step 2, write the plan for one change with its files, edge cases, and steps.
+- `review/`: after step 5, file the findings of a code or maturity review.
+- `memory/`: at step 7 and at the end of every phase, log what was done, what is left, and the open decisions.
+- `runbooks/`: when a task matches a runbook, execute it with the `/runbook` prompt instead of improvising.
+
+These rules apply to every folder.
 
 - Name each doc `YYYYMMDDHHMM_<short-descriptive-title>.md` so files sort by time and rarely collide across sessions.
+  Runbooks keep a stable `<slug>.md` name instead, because other docs and issues link to them.
 - Keep each folder's `index.md` current: one row per doc (date, file, one-line summary), newest first.
-- File a note at the end of every phase and at every hand-off.
-  Record what was done, what is left, and the open decisions.
 - Working docs only.
   Finalized ADRs belong in `docs/decisions/`, stories and epics in the tracker.
 - Never put secrets or credentials here; the store is committed and shared.

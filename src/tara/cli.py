@@ -938,7 +938,7 @@ _TEMPLATE_MAP = {
     "spike": ("agile/spike.md", "docs/spikes", "{slug}.md"),
     "adr": ("decisions/adr.md", "docs/decisions", "{number:04d}-{slug}.md"),
     "post-mortem": ("engineering/post-mortem.md", "docs/post-mortems", "{slug}.md"),
-    "runbook": ("engineering/runbook.md", "docs/runbooks", "{slug}.md"),
+    "runbook": ("engineering/runbook.md", ".agents/runbooks", "{slug}.md"),
     "changelog": ("changelog.md", ".", "CHANGELOG.md"),
     "ci": ("ci-github.yml", ".github/workflows", "ci.yml"),
 }

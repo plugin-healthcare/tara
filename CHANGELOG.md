@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Catalog runbook support. `runbooks.instructions.md` applies to `.agents/runbooks/**/*.md` and sets the rules for writing and executing a runbook, and the `/runbook` prompt executes one step by step. Agents stop at steps marked `(developer)` and leave them to the developer.
 - A `markdown-wrap` pre-commit hook (`tara.markdown_lint`) in the standard `.pre-commit-config.yaml`, failing on hard-wrapped markdown lines. Coding agents and editors default to wrapping prose at a column width like code; this repo's convention is one sentence per source line instead, so the hook catches the wrap before it's committed.
 - `tara rebuild` reconstructs Tara-managed core files, agent docs, catalog selections, standards scaffolding, managed skills, and configured integrations from `.tara/config.toml`. Legacy configs migrate only catalog artifacts whose installed content Tara can identify, dry runs write nothing, and collisions require `--force`.
 - Catalog instructions for Python (`python.instructions.md`, correct and wrong examples for imports, typing, settings, errors, Polars, and tests), Dagster, and deployment.
@@ -17,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The base instructions connect each `.agents/` folder to its step in the workflow, and `docs/agent-working-docs.md` describes the flow for users.
+- `tara new runbook` writes to `.agents/runbooks/` instead of `docs/runbooks/`, and `tara init` creates `.agents/runbooks/` with an index. Runbooks are procedures for agents and not package documentation. Move existing runbooks from `docs/runbooks/` to `.agents/runbooks/` to get the scoped runbook instructions.
 - The `markdown.instructions.md` catalog instructions now state the one-sentence-per-line rule explicitly and reference the `markdown-wrap` hook that enforces it.
 - `tara audit` warns when a `SKILL.md` exceeds 200 lines and reports each skill's total file count and size.
 - Claude Code commands now keep translated frontmatter but `@`-import their canonical `.github/prompts/` body instead of copying it. Claude subagent bodies remain generated copies because Claude Code does not expand imports in agent definitions.

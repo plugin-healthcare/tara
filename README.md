@@ -62,6 +62,8 @@ tara check           # run the lint/format/test gate
 tara audit           # lint your skills/agents/instructions for best practices
 ```
 
+For how agents use the `.agents/` working docs during a change, see [`docs/agent-working-docs.md`](docs/agent-working-docs.md).
+
 Once the files are in place, see [`docs/using-in-copilot.md`](docs/using-in-copilot.md) for how your agent picks up each artifact (instructions, skills, agents, prompts, MCP) while you code.
 
 ## Commands
@@ -87,7 +89,7 @@ The essentials:
   prompts/<name>.prompt.md         # slash-command prompts
 .mcp.json                          # MCP servers (Copilot CLI "mcpServers" schema)
 .agents/                           # tracked working docs (agent memory)
-  plan/ design/ review/ memory/    # each seeded with an index.md
+  design/ plan/ review/ memory/ runbooks/  # each seeded with an index.md
 .tara/
   config.toml                      # setup state: integrations, stack, and catalog artifacts
   skills.toml                      # skill manifest (source of truth)
