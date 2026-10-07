@@ -18,9 +18,10 @@ import shutil
 import subprocess
 import tempfile
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from tara import generate
 from tara.core import data_path, repo_root
 
 SKILLS_DIR = Path(".github") / "skills"
@@ -252,6 +253,12 @@ def _clone(repo: str, ref: str | None, dest: str) -> str:
     return _git(["rev-parse", "HEAD"], cwd=dest)
 
 
+def _ensure_safe(dest: Path) -> None:
+    """Raise when ``dest`` is outside the repository or reached through a symlink."""
+    if reason := generate.unsafe_reason(dest):
+        raise SkillError(f"refusing to write {dest.name}: {reason}")
+
+
 def fetch_skill(source: SkillSource, dest: Path) -> str:
     """Clone the source, copy its skill subfolder to ``dest``; return the commit SHA."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -259,6 +266,7 @@ def fetch_skill(source: SkillSource, dest: Path) -> str:
         src = Path(tmp) / source.path
         if not (src / "SKILL.md").is_file():
             raise SkillError(f"no SKILL.md found at '{source.path}' in {source.repo}")
+        _ensure_safe(dest)
         if dest.exists():
             shutil.rmtree(dest)
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -344,6 +352,7 @@ def add_set(name: str) -> list[tuple[SkillSource, str]]:
             if not (src / "SKILL.md").is_file():
                 raise SkillError(f"no SKILL.md found at '{member_path}' in {sset.repo}")
             dest = repo_root() / SKILLS_DIR / member_name
+            _ensure_safe(dest)
             if dest.exists():
                 shutil.rmtree(dest)
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -399,12 +408,32 @@ def update(name: str | None = None) -> list[tuple[str, str, str]]:
     return results
 
 
+def restore_missing(dry_run: bool = False) -> list[str]:
+    """Restore absent managed skills at their locked revision."""
+    manifest = read_manifest()
+    lock = read_lock()
+    lines: list[str] = []
+    for name, source in sorted(manifest.items()):
+        dest = repo_root() / SKILLS_DIR / name
+        if dest.exists():
+            continue
+        if dry_run:
+            lines.append(f"  [dry-run] restore skill {name}")
+            continue
+        locked_ref = lock.get(name, {}).get("commit") or source.ref
+        commit = fetch_skill(replace(source, ref=locked_ref), dest)
+        _record(source, commit)
+        lines.append(f"  restored skill {name} @ {commit[:12]}")
+    return lines
+
+
 def remove(name: str) -> None:
     """Remove a skill from the manifest and delete its installed files."""
     manifest = read_manifest()
     if name not in manifest:
         raise SkillError(f"'{name}' is not in the manifest")
     dest = repo_root() / SKILLS_DIR / name
+    _ensure_safe(dest)
     if dest.exists():
         shutil.rmtree(dest)
     del manifest[name]

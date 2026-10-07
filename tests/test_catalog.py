@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tara import catalog
+from tara import catalog, frontmatter
 
 
 def test_catalog_lists_bundled_agents(repo):
@@ -35,6 +35,24 @@ def test_install_agent_copies_into_repo(repo):
     installed = repo / ".github" / "agents" / "yoda.agent.md"
     assert installed.is_file()
     assert "Yoda" in installed.read_text()
+
+
+def test_install_instruction_skips_a_symlinked_destination_directory(repo):
+    outside = repo / "outside"
+    outside.mkdir()
+    instructions = repo / ".github" / "instructions"
+    instructions.parent.mkdir()
+    instructions.symlink_to(outside, target_is_directory=True)
+    item = next(
+        item
+        for item in catalog.catalog(["instructions"])["instructions"]
+        if item.name == "markdown.instructions.md"
+    )
+
+    line = catalog.install_item(item)
+
+    assert "symlink" in line
+    assert not (outside / item.name).exists()
 
 
 def test_catalog_lists_mcp_servers(repo):
@@ -143,3 +161,45 @@ def test_install_bundled_skill_overwrites_existing(repo, tmp_path, monkeypatch):
 
     catalog.install_item(item)
     assert not stale.exists()
+
+
+def test_instructions_index_lists_package_triggers():
+    assert catalog.instructions_index()["dagster.instructions.md"] == ["dagster"]
+
+
+def test_instructions_for_packages_matches_installed(repo):
+    items = catalog.instructions_for_packages({"Dagster"})
+
+    assert [it.name for it in items] == ["dagster.instructions.md"]
+    assert items[0].kind == "instructions"
+
+
+def test_instructions_for_packages_ignores_unrelated(repo):
+    assert catalog.instructions_for_packages({"requests"}) == []
+
+
+def test_instructions_for_packages_skips_a_file_already_in_the_repo(repo):
+    dest = repo / ".github" / "instructions"
+    dest.mkdir(parents=True)
+    (dest / "dagster.instructions.md").write_text("my own version\n")
+
+    assert catalog.instructions_for_packages({"dagster"}) == []
+
+
+def test_catalog_offers_the_runbook_prompt(repo):
+    # GIVEN the bundled catalog
+    # WHEN the prompts are listed
+    names = [it.name for it in catalog.catalog(["prompts"])["prompts"]]
+    # THEN the runbook prompt is offered
+    assert "runbook.prompt.md" in names
+
+
+def test_runbook_instructions_apply_to_runbooks_only(repo):
+    # GIVEN the bundled runbook instructions
+    items = catalog.catalog(["instructions"])["instructions"]
+    item = next(it for it in items if it.name == "runbooks.instructions.md")
+    assert item.source is not None
+    # WHEN their frontmatter is read
+    fm, _ = frontmatter.parse(item.source.read_text())
+    # THEN they are scoped to the runbooks folder
+    assert fm["applyTo"] == ".agents/runbooks/**/*.md"

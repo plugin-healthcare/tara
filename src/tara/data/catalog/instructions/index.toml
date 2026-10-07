@@ -1,0 +1,15 @@
+# Package triggers for the bundled scoped instructions.
+#
+# `tara sync` scans the project's direct dependencies and installs a matching
+# instruction file the same way it installs an indexed skill: a repo that
+# actually uses the library gets its conventions, and one that does not is left
+# alone.
+#
+#   [instructions."<file>.instructions.md"]
+#   packages = ["<distribution name>", ...]
+#
+# Instruction files without an entry here are never installed automatically.
+# They stay opt-in through the `tara init` / `tara add` picker.
+
+[instructions."dagster.instructions.md"]
+packages = ["dagster"]

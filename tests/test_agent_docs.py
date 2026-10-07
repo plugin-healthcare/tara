@@ -20,6 +20,14 @@ def test_write_agent_docs_creates_typed_folders_with_index(repo):
     assert "| Date | File | Summary |" in memory_index
 
 
+def test_write_agent_docs_creates_a_runbooks_folder(repo):
+    # GIVEN a repository
+    # WHEN the doc store is scaffolded
+    agent_docs.write_agent_docs(dry_run=False)
+    # THEN it has a runbooks folder with an index
+    assert (repo / agent_docs.DOC_STORE / "runbooks" / "index.md").is_file()
+
+
 def test_store_is_tracked_by_default(repo):
     agent_docs.write_agent_docs(dry_run=False)
     assert not (repo / ".gitignore").exists()

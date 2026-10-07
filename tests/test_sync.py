@@ -63,7 +63,67 @@ def test_sync_skips_core_managed_skill(repo, tmp_path, patch_discover):
 
     assert result.skipped == ["writing-adrs"]
     assert result.added == []
-    assert result.warnings  # a warning explains why it was skipped
+    assert result.skipped_reasons["writing-adrs"] == "core catalog"
     # Core file is untouched and sync never recorded ownership of it.
     assert (core / "SKILL.md").read_text() == "core content, do not overwrite\n"
     assert "writing-adrs" not in sync_mod.read_lock()
+
+
+def test_sync_reports_a_git_managed_skill_as_git_managed(
+    repo, tmp_path, patch_discover
+):
+    """A skill in skills.toml came from a git repo, not Tara's own catalog."""
+    installed = repo / sync_mod.SKILLS_DIR / "developing-with-streamlit"
+    installed.mkdir(parents=True)
+    (installed / "SKILL.md").write_text("from the streamlit theme\n")
+    (repo / ".tara").mkdir(exist_ok=True)
+    (repo / ".tara" / "skills.toml").write_text(
+        "[skills.developing-with-streamlit]\n"
+        'repo = "https://github.com/streamlit/agent-skills"\n'
+        'path = "developing-with-streamlit"\n'
+        'ref = "main"\n'
+    )
+
+    md = _make_library_skill(tmp_path / "lib", "developing-with-streamlit")
+    patch_discover([md])
+
+    result = sync_mod.sync(all_packages=True)
+
+    assert result.skipped == ["developing-with-streamlit"]
+    assert result.skipped_reasons["developing-with-streamlit"] == "git-managed"
+
+
+def _link_skills_outside(repo, tmp_path_factory) -> Path:
+    outside = tmp_path_factory.mktemp("outside")
+    skills_dir = repo / sync_mod.SKILLS_DIR
+    skills_dir.parent.mkdir(parents=True, exist_ok=True)
+    skills_dir.symlink_to(outside, target_is_directory=True)
+    return outside
+
+
+def test_sync_never_installs_through_a_symlinked_skills_directory(
+    repo, tmp_path, tmp_path_factory, patch_discover
+):
+    md = _make_library_skill(tmp_path / "lib", "foo")
+    patch_discover([md])
+    outside = _link_skills_outside(repo, tmp_path_factory)
+
+    result = sync_mod.sync(all_packages=True)
+
+    assert result.added == []
+    assert result.skipped == ["foo"]
+    assert "symlink" in result.skipped_reasons["foo"]
+    assert list(outside.iterdir()) == []
+
+
+def test_sync_never_removes_through_a_symlinked_skills_directory(
+    repo, tmp_path_factory, patch_discover
+):
+    sync_mod.write_lock({"foo": {"package": "pkg", "version": "1.0.0"}})
+    outside = _link_skills_outside(repo, tmp_path_factory)
+    (outside / "foo").mkdir()
+    patch_discover([])
+
+    sync_mod.sync(all_packages=True)
+
+    assert (outside / "foo").is_dir()
