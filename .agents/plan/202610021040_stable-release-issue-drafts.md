@@ -711,7 +711,7 @@ An unquoted colon in a description is enough to trigger it, and the raw frontmat
 
 ## Draft I: Read the version from the tara-dev distribution (2.0.0)
 
-Posted as #57.
+Posted as #57, then folded into #21.
 
 Labels: bug.
 Milestone: 2.0.0.
@@ -734,7 +734,7 @@ After the rename to `tara-dev` it raises `PackageNotFoundError`, or prints the v
 
 ## Draft J: Keep config.toml valid when the artifact manifest is updated (2.0.0)
 
-Posted as #58.
+Posted as #58, then folded into #18.
 
 Labels: bug.
 Milestone: 2.0.0.
@@ -839,7 +839,7 @@ Source: `.agents/review/202610062300_code-quality-and-structure-review.md`, C2, 
 
 ## Draft N: Use the project check in starter commands and validate bundled content (2.0.0)
 
-Posted as #62.
+Posted as #62, then folded into #61.
 
 Labels: bug.
 Milestone: 2.0.0.
