@@ -683,7 +683,193 @@ The base instructions already say that backlog items belong in the tracker, so t
 - [ ] Existing files under the old `docs/` folders are left untouched.
 - [ ] The docs describe the flow from draft file to board.
 
+## Draft H: Fail closed when agent frontmatter does not parse (2.0.0)
+
+Posted as #56.
+
+Labels: bug.
+Milestone: 2.0.0.
+Points: 2.
+Source: `.agents/review/202610062245_pr-17-branch-review.md`, finding 1.
+
+### Problem
+
+`frontmatter.parse` returns an empty mapping when the YAML in an agent file fails to parse.
+The Claude translator then omits `tools` and the OpenCode translator omits `permission`, so a tool-restricted agent gets every tool.
+An unquoted colon in a description is enough to trigger it, and the raw frontmatter ends up in the generated body.
+
+### Required changes
+
+- When a source file starts with `---` and the frontmatter does not parse, skip the file and report it with the parse error.
+- Never generate an agent without its tool restriction.
+
+### Definition of done
+
+- [ ] A test with `description: Reviewer. Use when: reviewing diffs` and `tools: [read, search]` shows the agent is skipped and reported for both Claude and OpenCode.
+- [ ] Valid agents still translate unchanged.
+- [ ] The changelog lists the fix.
+
+## Draft I: Read the version from the tara-dev distribution (2.0.0)
+
+Posted as #57.
+
+Labels: bug.
+Milestone: 2.0.0.
+Points: 1.
+Source: `.agents/review/202610062245_pr-17-branch-review.md`, finding 2.
+
+### Problem
+
+`tara --version` looks up the distribution `tara`.
+After the rename to `tara-dev` it raises `PackageNotFoundError`, or prints the version of an unrelated package called `tara`.
+
+### Required changes
+
+- Resolve the distribution that provides the `tara` module, and fall back to `tara-dev`.
+
+### Definition of done
+
+- [ ] A test covers the lookup without depending on the installed distribution name.
+- [ ] `uvx --from tara-dev tara --version` prints the release version in the release smoke test.
+
+## Draft J: Keep config.toml valid when the artifact manifest is updated (2.0.0)
+
+Posted as #58.
+
+Labels: bug.
+Milestone: 2.0.0.
+Points: 2.
+Source: `.agents/review/202610062245_pr-17-branch-review.md`, finding 3.
+
+### Problem
+
+`_replace_artifacts_table` removes only `key = ...` lines from `[artifacts]` and keeps the continuation lines of a list that spans several lines.
+The file no longer parses, and every command that loads the config fails until it is fixed by hand.
+Formatters such as taplo write long lists this way.
+
+### Required changes
+
+- Update the `[artifacts]` table without leaving partial values behind, and keep the rest of the file as the user wrote it.
+- Use `tomlkit` if a dependency is acceptable, otherwise skip whole values when filtering.
+
+### Definition of done
+
+- [ ] A test with a list over several lines shows the updated file parses and keeps unrelated tables and comments.
+- [ ] The changelog lists the fix.
+
+## Draft K: Split cli.py and group modules into packages (2.x)
+
+Posted as #59.
+
+Labels: enhancement.
+Milestone: 2.x.
+Points: 8.
+
+### Problem
+
+`src/tara/` has 18 modules in one folder.
+`cli.py` has 1,328 lines and holds every command group, so changes to unrelated commands touch the same file.
+
+### Required changes
+
+- Turn `cli.py` into a `cli/` package with one module per command group, and keep the `tara` entry point unchanged.
+- Group the generators for other agent tools, `claude`, `opencode`, `hooks`, and `generate`, into an `integrations/` package.
+- Move code only, with no behaviour changes, in a separate pull request from any feature work.
+
+### Definition of done
+
+- [ ] `tara --help` and `docs/cli.md` are unchanged.
+- [ ] No module in `src/tara/` is longer than about 500 lines.
+- [ ] `tara check` passes.
+
+## Draft L: One error hierarchy and clean CLI errors (2.0.0)
+
+Posted as #60.
+
+Labels: bug.
+Milestone: 2.0.0.
+Points: 4.
+Source: `.agents/review/202610062300_code-quality-and-structure-review.md`, C1.
+
+### Problem
+
+Tara has four unrelated exception bases and also raises built-in `ValueError` and `FileNotFoundError` as domain errors.
+`tara add`, `tara standards`, `tara init`, and `tara rebuild` let a `ConfigError` or `HookError` escape as a traceback, and a malformed `.tara/mcp.local.json` or `.claude/settings.json` crashes the command.
+Two `except Exception` blocks in `cli.py` turn bugs in Tara itself into one-line warnings.
+
+### Required changes
+
+- Add `errors.py` with `TaraError`, and make the existing exception classes subclass it while staying importable from their current modules.
+- Add a `main()` entry point that prints `error: <message>` and exits 1 for a `TaraError`, and point `[project.scripts]` at it.
+- Raise a `TaraError` subclass for malformed `.mcp.json`, `.tara/mcp.local.json`, `.claude/settings.json`, and `.tara/checks.toml`.
+- Replace both `except Exception` blocks with `except TaraError`.
+
+### Definition of done
+
+- [ ] Tests show that a malformed config, settings file, or checks file gives one error line and exit code 1 for `add`, `standards`, `init`, `rebuild`, and `check`.
+- [ ] The CLI surface snapshot in `tests/test_cli_docs.py` is unchanged.
+
+## Draft M: Small correctness fixes from the quality review (2.0.0)
+
+Posted as #61.
+
+Labels: bug.
+Milestone: 2.0.0.
+Points: 2.
+Source: `.agents/review/202610062300_code-quality-and-structure-review.md`, C2, C5, C6, and C9.
+
+### Problem
+
+- `tara audit --deep` exits 0 when the Copilot review fails.
+- `--dry-run` still asks "Overwrite?" in `write_generated` and `mirror_skills`, and then does nothing.
+- `tara skill add ... --name foo.v2` writes an unquoted TOML key, and every later read of `.tara/skills.toml` fails with `KeyError`.
+- PEP 503 name normalisation exists twice, and `core.port_targets` is unused.
+
+### Required changes
+
+- Exit 1 when the deep review fails.
+- Return before the confirmation prompt when `dry_run` is set.
+- Quote skill names as TOML keys in `.tara/skills.toml`.
+- Remove `skills._normalize` in favour of `sync.normalize_package_name`, and remove `core.port_targets` and the empty helper section in `core.py`.
+
+### Definition of done
+
+- [ ] One test per fix.
+- [ ] The changelog lists the user-facing fixes.
+
+## Draft N: Use the project check in starter commands and validate bundled content (2.0.0)
+
+Posted as #62.
+
+Labels: bug.
+Milestone: 2.0.0.
+Points: 2.
+Source: `.agents/review/202610062300_code-quality-and-structure-review.md`, D1 and D7.
+
+### Problem
+
+The generated `check` starter command for Claude and OpenCode runs `ruff` and `pytest` directly, so it skips types, security, and `.tara/checks.toml`.
+The `review` starter command names the `gilfoyle` agent, which only exists when the user installed it.
+No test checks that every bundled catalog file has valid frontmatter, and a broken file would now be skipped or granted the wrong tools.
+
+### Required changes
+
+- Make the `check` starter command run `uv run tara check`, and make the `review` starter command independent of any agent.
+- Add a test that parses every `src/tara/data/catalog/**/*.md` and runs the audit rules over it with no errors.
+
+### Definition of done
+
+- [ ] Generated starter commands match for Claude and OpenCode.
+- [ ] The catalog test fails when a bundled file has broken frontmatter.
+
 ## Amendments to existing issues
+
+- #30: the OpenCode port replaces and removes user-owned `instructions` and `mcp` keys in `opencode.json` (review finding 5), and several writes under `.tara/` and to `.mcp.json` skip the containment check (review finding 7).
+- Before release: decide whether `tara init --tool all` may now include Claude, or map it to copilot and opencode as the config migration does (review finding 6).
+- 2.x: a 1.x config loses automatic artifact discovery after `tara integrations` or `tara add` (review finding 4).
+- #21: update the `pyproject.toml` description, classifiers, keywords, authors, and changelog and documentation URLs, and the Typer help text. State in the README that the public surface is the CLI, the config schema, and `python -m tara.markdown_lint`, and add config fixture tests for 1.0, 1.x, and 2.0 configs (quality review P1 and P2).
+- #22: add a CI job that builds the wheel, installs it in a clean environment, and runs `tara --version`, `tara init --dry-run`, and `python -m tara.markdown_lint` (quality review P3).
+- #59: use the target layout and migration order from the quality review, section 2, and include actions 7 to 10.
 
 - #40: also verify that installed skill files still match the lock, and report a mismatch in `tara audit`.
 - #38: document that `tara check` runs the commands in a repository's `.tara/checks.toml`, so running it in an untrusted clone executes that repository's commands.
