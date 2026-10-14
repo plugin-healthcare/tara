@@ -9,7 +9,12 @@ applyTo: "**/*.py"
   Defer internal detail to a comment on its own line above the code (never inline/trailing).
   Comments and docstrings describe current behavior, not a changelog or a history of how the code got here; that belongs in the changelog or an ADR.
 - Prefer `pathlib.Path` over `os.path`.
-  No bare `except:` — catch specific exceptions.
+  No bare `except:`; catch specific exceptions.
 - Use `logging`, never `print()`, in library/application code.
 - Tabular data: prefer `polars` (lazy `pl.LazyFrame`) over `pandas`.
+- Keep frames lazy until the final step.
+  Do not loop over rows or pull unbounded data into Python collections.
+- Use absolute imports.
+  Keep `__init__.py` limited to imports and its module docstring.
+- Write pytest tests as plain functions and mirror the source layout under `tests/`.
 - Run `uv run ruff check --fix && uv run ruff format` before considering a change done.

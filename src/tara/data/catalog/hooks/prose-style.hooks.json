@@ -1,0 +1,25 @@
+{
+  "description": "Block a write that introduces an em dash or an AI-tic sentence fragment into markdown. Enforces the markdown instructions instead of only stating them (Claude Code PostToolUse).",
+  "requires": [
+    "jq"
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath // empty' | while IFS= read -r f; do case \"$f\" in *.md|*.mdx|*.qmd) if [ -f \"$f\" ] && grep -qF \"$(printf '\\xe2\\x80\\x94')\" \"$f\"; then n=$(grep -nF \"$(printf '\\xe2\\x80\\x94')\" \"$f\" | head -1 | cut -d: -f1); jq -n --arg f \"$f\" --arg n \"$n\" '{decision:\"block\", reason: (\"Em dash found in \" + $f + \" at line \" + $n + \". Replace it with a comma, period, colon, or parentheses, per the markdown instructions. Fix it before continuing.\")}'; fi ;; esac; done",
+            "timeout": 15
+          },
+          {
+            "type": "prompt",
+            "prompt": "You are a markdown style linter enforcing this repo's prose rules (.github/instructions/markdown.instructions.md) on NEWLY WRITTEN text only. Ignore anything already in the file before this edit, code blocks, and short table or list label cells. Hook input (Write or Edit tool call): $ARGUMENTS. Only check .md/.mdx/.qmd files; for any other file respond with exactly {\"decision\":\"allow\"}. For markdown files, check the new prose (tool_input.content for Write, tool_input.new_string for Edit) against these rules: (1) full sentences, not fragments glued together with commas where a period belongs; (2) no 'not X, but Y' or 'not just X' contrastive tic used as a stylistic habit; (3) no colon-into-noun-phrase-fragment construction such as 'X: a direction, not a task, something that...'. If any rule is broken, respond with exactly this JSON and nothing else: {\"decision\":\"block\",\"reason\":\"<quote the offending sentence, name the rule it breaks, one sentence>\"}. If the new prose is clean, respond with exactly {\"decision\":\"allow\"}. Output ONLY the JSON object, no other text.",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

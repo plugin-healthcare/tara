@@ -11,6 +11,6 @@ Add type hints to the provided Python code:
 3. Only add `from __future__ import annotations` if you need forward references and it isn't already present.
 4. Prefer built-in generics (`list[str]`, `dict[str, int]`) over `typing.List` / `typing.Dict` (Python 3.9+).
 5. Use `X | None` over `Optional[X]` (Python 3.10+).
-6. Do NOT change any logic — only add annotations.
+6. Do NOT change any logic; only add annotations.
 
 After editing, verify with: `uv run ty check` (unless using a different type checker).

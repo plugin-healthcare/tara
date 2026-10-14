@@ -5,63 +5,6 @@ from __future__ import annotations
 from tara import audit
 
 
-def test_parse_frontmatter_scalars():
-    fm, body = audit.parse_frontmatter(
-        '---\nname: demo\ndescription: "Use when testing."\n---\n\n# Demo\nbody\n'
-    )
-    assert fm["name"] == "demo"
-    assert fm["description"] == "Use when testing."
-    assert body.startswith("# Demo")
-
-
-def test_parse_frontmatter_none():
-    fm, body = audit.parse_frontmatter("# No frontmatter\nbody\n")
-    assert fm == {}
-    assert "No frontmatter" in body
-
-
-def test_parse_frontmatter_folded_block_scalar():
-    text = (
-        "---\n"
-        "name: query\n"
-        "description: >\n"
-        "  Run SQL queries against DuckDB.\n"
-        "  Accepts raw SQL or questions.\n"
-        "argument-hint: <SQL>\n"
-        "---\n\nbody\n"
-    )
-    fm, _ = audit.parse_frontmatter(text)
-    assert fm["name"] == "query"
-    expected = "Run SQL queries against DuckDB. Accepts raw SQL or questions."
-    assert fm["description"] == expected
-    assert fm["argument-hint"] == "<SQL>"
-
-
-def test_parse_frontmatter_literal_block_scalar():
-    text = "---\ndescription: |\n  line one\n  line two\n---\n\nbody\n"
-    fm, _ = audit.parse_frontmatter(text)
-    assert fm["description"] == "line one\nline two"
-
-
-def test_parse_frontmatter_implicit_plain_multiline():
-    text = (
-        "---\n"
-        "name: dagster-expert\n"
-        "description:\n"
-        "  Expert guidance for Dagster.\n"
-        "  ALWAYS use before data pipeline tasks.\n"
-        "references:\n"
-        "  - dagster-core\n"
-        "  - cli-patterns\n"
-        "---\n\nbody\n"
-    )
-    fm, _ = audit.parse_frontmatter(text)
-    assert fm["name"] == "dagster-expert"
-    expected = "Expert guidance for Dagster. ALWAYS use before data pipeline tasks."
-    assert fm["description"] == expected
-    assert fm["references"] == ""  # nested list is skipped, not folded
-
-
 def _write_skill(repo, name, text):
     folder = repo / ".github" / "skills" / name
     folder.mkdir(parents=True)
@@ -132,6 +75,28 @@ def test_audit_non_trigger_description_warns(repo):
     )
     findings = audit.audit_skill(path)
     assert any("when" in f.message for f in findings)
+
+
+def test_audit_oversized_skill_recommends_specialising_or_references(repo):
+    path = _write_skill(
+        repo,
+        "large",
+        "---\n"
+        "name: large\n"
+        'description: "Use when testing an oversized skill body."\n'
+        "---\n\n"
+        "# Large\n\n" + "\n".join(f"Instruction {line}." for line in range(205)) + "\n",
+    )
+
+    findings = audit.audit_skill(path)
+
+    assert any(
+        "focused skills" in finding.message
+        and "references/" in finding.message
+        and "1 files" in finding.message
+        and "KiB" in finding.message
+        for finding in findings
+    )
 
 
 def test_audit_all_discovers_and_returns_findings(repo):

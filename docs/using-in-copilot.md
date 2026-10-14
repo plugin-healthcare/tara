@@ -13,6 +13,8 @@ copilot
 Inside a session, `/env` shows everything Copilot has loaded: instructions, MCP servers, skills, agents, hooks, and LSPs.
 Use it to confirm your guardrails are active.
 
+Using opencode or Claude Code instead? Run `tara tools` to generate their files from this same `.github/` setup; see [Targeting other agent tools](../README.md#targeting-other-agent-tools).
+
 ## Instructions (always-on and scoped)
 
 Tara writes `.github/copilot-instructions.md` (always-on) and optional `.github/instructions/*.instructions.md` (scoped, each with an `applyTo` glob in its frontmatter).

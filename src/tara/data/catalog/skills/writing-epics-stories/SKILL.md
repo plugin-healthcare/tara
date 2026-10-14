@@ -1,6 +1,6 @@
 ---
 name: writing-epics-stories
-description: "Use when defining or refining product work: turning a feature idea into an epic, breaking an epic into user stories, or refining stories into technical tasks with acceptance criteria and a Definition of Done. Also use when creating or updating GitHub issues and pull requests for that work."
+description: "Use when defining or refining product work: turning a feature idea into an epic, breaking an epic into user stories, or refining stories into technical tasks with acceptance criteria and a Definition of Done. Covers issue content; defer issue creation, hierarchy links, and project fields to the managing-github-issues skill."
 ---
 
 # Writing epics and stories

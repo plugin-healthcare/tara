@@ -22,10 +22,10 @@ class ReviewUnavailable(RuntimeError):
 
 def reviewer_rubric() -> str:
     """Return the skill-reviewer agent's rubric (its markdown body)."""
-    from tara.audit import parse_frontmatter
+    from tara import frontmatter
 
     agent = data_path() / "catalog" / "agents" / "skill-reviewer.agent.md"
-    _, body = parse_frontmatter(agent.read_text())
+    _, body = frontmatter.parse(agent.read_text())
     return body
 
 

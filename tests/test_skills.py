@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
+
+import pytest
+
 from tara import skills
 
 
@@ -139,3 +143,20 @@ def test_add_set_root_path_normalizes(repo, skill_source, monkeypatch):
     # path is normalized ('demo', not './demo') so update/remove resolve correctly
     assert skills.read_manifest()["demo"].path == "demo"
     assert skills.update("demo")[0][0] == "demo"
+
+
+def test_remove_never_deletes_through_a_symlinked_skills_directory(
+    repo, skill_source, tmp_path_factory
+):
+    url, ref = skill_source
+    skills.add(url, path="demo", ref=ref)
+    outside = tmp_path_factory.mktemp("outside")
+    (outside / "demo").mkdir()
+    skills_dir = repo / skills.SKILLS_DIR
+    shutil.rmtree(skills_dir)
+    skills_dir.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(skills.SkillError, match="symlink"):
+        skills.remove("demo")
+
+    assert (outside / "demo").is_dir()
