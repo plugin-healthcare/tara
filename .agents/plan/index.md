@@ -4,6 +4,8 @@ Plans and execution plans. One row per doc, newest first. Name each file `YYYYMM
 
 | Date | File | Summary |
 | ---- | ---- | ------- |
+| 2026-10-12 | 202610122358_release-issue-drafts.md | Editable bodies for 46 issues and eight PR findings; release milestone assignments applied on October 13, with body edits still pending. |
+| 2026-10-12 | 202610122344_release-milestones-roadmap-draft.md | Release grouping applied; 2.x retired, while issue-body amendments and the #33 roadmap rewrite remain in draft. |
 | 2026-10-04 | 202610041800_release-2.0.0-execution-runbook.md | Step-by-step execution of the 2.0.0 blockers, with a review stop after each issue. |
 | 2026-10-02 | 202610021040_stable-release-issue-drafts.md | Review copy of the bodies of #33 to #55, the proposed edits, and the amendments. |
 | 2026-10-02 | 202610021025_stable-release-roadmap.md | Roadmap to a stable 2.0.0, missing issues, superpowers and Matt Pocock skill themes, and the release runbook. |

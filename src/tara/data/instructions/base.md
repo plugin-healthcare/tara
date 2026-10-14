@@ -10,6 +10,13 @@ These instructions apply to every project, whatever the stack.
 - Be short, precise and direct. Don't flatter.
   Ask when unsure, and say so when blocked instead of guessing.
 - Write plainly: no em dashes, emoji, hype adjectives, filler, or a colon followed by a noun-phrase fragment.
+  Use "80% of the way to ASD-STE100" (Simplified Technical English) as a default for how-tos and introductory explanations.
+  Prefer short, complete sentences, active voice, and familiar, precise words where they fit the audience and purpose.
+  Keep technical terms consistent and explain unfamiliar terms on first use.
+  Preserve technical meaning, conditions, and warnings.
+  For ADRs and scientific writing, prioritize precise reasoning, evidence, assumptions, uncertainty, and trade-offs.
+  Retain domain terminology, notation, and longer sentences or passive voice when they improve accuracy or clarity.
+  Treat this as readability guidance, not formal compliance or a fixed word limit.
   See the `writing-documentation` skill.
 - Prefer open source and open standards, official documentation over blogs, and an existing good tool over a new one.
 - Use the `tara` CLI for setup, scaffolding, checks and standards.

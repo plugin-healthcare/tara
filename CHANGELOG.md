@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The writing guidance now uses a practical ASD-STE100-inspired default for how-tos and introductory explanations, with flexibility for ADRs and scientific writing to preserve precise reasoning and domain conventions.
+  It sets no formal compliance requirement or fixed word limit.
 - The base instructions connect each `.agents/` folder to its step in the workflow, and `docs/agent-working-docs.md` describes the flow for users.
 - `tara new runbook` writes to `.agents/runbooks/` instead of `docs/runbooks/`, and `tara init` creates `.agents/runbooks/` with an index. Runbooks are procedures for agents and not package documentation. Move existing runbooks from `docs/runbooks/` to `.agents/runbooks/` to get the scoped runbook instructions.
 - The `markdown.instructions.md` catalog instructions now state the one-sentence-per-line rule explicitly and reference the `markdown-wrap` hook that enforces it.
