@@ -7,6 +7,7 @@ standardized working docs it produces during the fixed flow:
 - ``.agents/design/``  -- design docs and technical drafts
 - ``.agents/review/``  -- code and maturity reviews
 - ``.agents/memory/``  -- freeform session notes and handover scratch
+- ``.agents/runbooks/`` -- repeatable procedures an agent executes step by step
 
 Docs are named ``YYYYMMDDHHMM_<short-descriptive-title>.md`` (no spaces) and each
 folder keeps an ``index.md``
@@ -16,7 +17,7 @@ knowledge; set ``[agents] gitignore`` in ``.tara/config.toml`` to keep chosen
 subfolders (for example ``memory``) local. Never write secrets anywhere here.
 
 ADRs live in ``docs/decisions/`` and stories/epics in your tracker or board,
-not here; this store holds working plans, designs, reviews, and handover notes.
+not here; this store holds working plans, designs, reviews, handover notes, and runbooks.
 
 Optimizing knowledge retention (a structured, queryable store) is deliberately
 deferred; this flat, greppable layout is the interim.
@@ -49,6 +50,7 @@ FOLDERS: tuple[tuple[str, str], ...] = (
     ("design", "Design docs; finalized ADRs live in docs/decisions/."),
     ("review", "Code and maturity reviews."),
     ("memory", "Freeform session notes and handover scratch."),
+    ("runbooks", "Repeatable procedures an agent executes step by step."),
 )
 
 

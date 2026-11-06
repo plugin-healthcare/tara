@@ -10,13 +10,36 @@ of these options so they are discoverable. The models here read the file back.
 from __future__ import annotations
 
 import tomllib
+from collections.abc import MutableMapping
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+import tomlkit
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from tara.core import repo_root
+from tara import catalog
+from tara.core import COPILOT, normalize_integrations, repo_root
 
 CONFIG = Path(".tara") / "config.toml"
+
+
+class ConfigError(Exception):
+    """``.tara/config.toml`` says something Tara cannot act on.
+
+    Raised instead of falling back to defaults: a typo in ``integrations`` must be
+    reported, not silently turned into a setup the developer did not ask for.
+    The CLI reports it as a one-line error and exits non-zero.
+    """
+
+
+def _explain(exc: ValidationError) -> str:
+    """Render a ValidationError as one readable ``key: reason`` line per problem."""
+    lines = []
+    for err in exc.errors():
+        key = ".".join(str(part) for part in err["loc"]) or "config"
+        reason = err["msg"].removeprefix("Value error, ")
+        lines.append(f"  {key}: {reason}")
+    return "\n".join(lines)
+
 
 _HEADER = "# Tara setup state, written by `tara init`. Safe to edit by hand.\n"
 
@@ -66,26 +89,92 @@ class AgentsConfig(BaseModel):
     gitignore: list[str] = Field(default_factory=list)
 
 
+class ArtifactsConfig(BaseModel):
+    """Catalog selections needed to reconstruct a repository setup."""
+
+    skills: list[str] = Field(default_factory=list)
+    agents: list[str] = Field(default_factory=list)
+    prompts: list[str] = Field(default_factory=list)
+    instructions: list[str] = Field(default_factory=list)
+    hooks: list[str] = Field(default_factory=list)
+    mcp: list[str] = Field(default_factory=list)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _sorted_names(cls, value: object) -> list[str]:
+        """Require artifact names to be strings and store them deterministically."""
+        if value is None:
+            return []
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            raise ValueError("artifact names must be a list of strings")
+        names = [item for item in value if isinstance(item, str)]
+        return sorted(set(names))
+
+
 class TaraConfig(BaseModel):
     """Repo setup state recorded by ``tara init``.
 
-    ``tool`` is the agent tool the repo is set up for (``copilot``, ``opencode``,
-    or ``all``); ``stack`` is the default stack; ``standards`` holds optional
-    tooling overrides; ``agents`` tunes the ``.agents/`` doc store.
+    ``integrations`` lists the coding-agent products Tara targets; Copilot is present
+    because every other tool's files are generated from its ``.github/`` setup.
+    ``stack`` is the default stack; ``standards`` holds optional tooling
+    overrides; ``agents`` tunes the ``.agents/`` doc store.
     """
 
-    tool: str = "copilot"
+    integrations: list[str] = Field(default_factory=lambda: [COPILOT])
     stack: str = "python"
     standards: StandardsConfig = Field(default_factory=StandardsConfig)
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
+    artifacts: ArtifactsConfig | None = None
+
+    @field_validator("integrations", mode="before")
+    @classmethod
+    def _normalize(cls, value: object) -> list[str]:
+        """Accept a list, a single name, or the legacy ``all`` shorthand."""
+        if isinstance(value, str):
+            value = [value]
+        if not isinstance(value, list):
+            raise ValueError("integrations must be a string or list of strings")
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("integrations must contain only strings")
+        return normalize_integrations([item for item in value if isinstance(item, str)])
 
     @classmethod
     def load(cls) -> TaraConfig:
-        """Read ``.tara/config.toml``, or return defaults if it is absent."""
+        """Read ``.tara/config.toml``, or return defaults if it is absent.
+
+        Raises :class:`ConfigError` when the file exists but cannot be used, so
+        the command reports what is wrong with it rather than guessing.
+        """
         path = repo_root() / CONFIG
         if not path.exists():
             return cls()
-        return cls.model_validate(tomllib.loads(path.read_text()))
+        try:
+            raw = tomllib.loads(path.read_text())
+        except tomllib.TOMLDecodeError as exc:
+            raise ConfigError(f"{CONFIG} is not valid TOML: {exc}") from exc
+        except OSError as exc:
+            raise ConfigError(f"cannot read {CONFIG}: {exc}") from exc
+        if "integrations" not in raw:
+            if "tools" in raw:
+                raw["integrations"] = raw.pop("tools")
+            elif "tool" in raw:
+                legacy = raw.pop("tool")
+                raw["integrations"] = (
+                    [COPILOT, "opencode"] if legacy == "all" else legacy
+                )
+        try:
+            return cls.model_validate(raw)
+        except ValidationError as exc:
+            raise ConfigError(f"{CONFIG} is invalid:\n{_explain(exc)}") from exc
+
+    @property
+    def port_targets(self) -> list[str]:
+        """Configured integrations whose files are generated from Copilot."""
+        return [
+            integration for integration in self.integrations if integration != COPILOT
+        ]
 
 
 def _esc(value: str) -> str:
@@ -120,7 +209,12 @@ def _dump(data: dict[str, object]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_config(tool: str, stack: str, dry_run: bool) -> str:
+def write_config(
+    integrations: list[str] | str,
+    stack: str,
+    dry_run: bool,
+    artifacts: ArtifactsConfig | None = None,
+) -> str:
     """Record setup state in ``.tara/config.toml``, preserving existing overrides.
 
     Optional tables the config does not set are appended as commented examples so
@@ -128,19 +222,112 @@ def write_config(tool: str, stack: str, dry_run: bool) -> str:
     """
     path = repo_root() / CONFIG
     existing = tomllib.loads(path.read_text()) if path.exists() else {}
-    data: dict[str, object] = {"tool": tool, "stack": stack}
+    selected = normalize_integrations(integrations)
+    data: dict[str, object] = {"integrations": selected, "stack": stack}
     for key, value in existing.items():
-        if key not in ("tool", "stack"):
+        if key not in ("tool", "tools", "integrations", "stack"):
             data[key] = value
+    if artifacts is not None:
+        data["artifacts"] = artifacts.model_dump()
+    elif "artifacts" not in data and not path.exists():
+        data["artifacts"] = ArtifactsConfig().model_dump()
     rel = CONFIG.as_posix()
+    listed = ", ".join(selected)
     if dry_run:
         verb = "update" if path.exists() else "write"
-        return f"  [dry-run] {verb} {rel} (tool={tool}, stack={stack})"
+        return f"  [dry-run] {verb} {rel} (integrations={listed}, stack={stack})"
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.write_text(
+            _update_setup_state(
+                path.read_text(encoding="utf-8"), selected, stack, artifacts
+            ),
+            encoding="utf-8",
+        )
+        return f"  updated {rel} (integrations={listed}, stack={stack})"
     docs = "\n".join(doc for name, doc in _OPTION_DOCS.items() if name not in data)
     text = _HEADER + _dump(data)
     if docs:
         text += "\n# --- optional settings (uncomment to enable) ---\n" + docs
     path.write_text(text)
-    verb = "updated" if existing else "wrote"
-    return f"  {verb} {rel} (tool={tool}, stack={stack})"
+    return f"  wrote {rel} (integrations={listed}, stack={stack})"
+
+
+def _update_setup_state(
+    text: str, integrations: list[str], stack: str, artifacts: ArtifactsConfig | None
+) -> str:
+    """Set the managed keys in an existing config, keeping everything else intact."""
+    document = tomlkit.parse(text)
+    for legacy in ("tool", "tools"):
+        document.pop(legacy, None)
+    document["integrations"] = integrations
+    document["stack"] = stack
+    if artifacts is not None:
+        document = tomlkit.parse(
+            _replace_artifacts_table(tomlkit.dumps(document), artifacts)
+        )
+    updated = tomlkit.dumps(document)
+    missing = [
+        doc
+        for name, doc in _OPTION_DOCS.items()
+        if name not in document and doc.splitlines()[0] not in updated
+    ]
+    if missing:
+        updated += "\n" + "\n".join(missing)
+    return updated
+
+
+_ARTIFACT_FIELDS = {
+    "skill": "skills",
+    "agent": "agents",
+    "prompt": "prompts",
+    "instructions": "instructions",
+    "hooks": "hooks",
+    "mcp": "mcp",
+}
+
+
+def merge_artifacts(
+    artifacts: ArtifactsConfig | None, items: list[tuple[str, str]]
+) -> ArtifactsConfig:
+    """Return a manifest containing ``items`` in addition to existing selections."""
+    merged = (artifacts or ArtifactsConfig()).model_copy(deep=True)
+    for kind, name in items:
+        field = _ARTIFACT_FIELDS.get(kind)
+        if field is None:
+            raise ValueError(f"unknown artifact kind '{kind}'")
+        names = getattr(merged, field)
+        if name not in names:
+            names.append(name)
+            names.sort()
+    return merged
+
+
+def _replace_artifacts_table(text: str, artifacts: ArtifactsConfig) -> str:
+    """Replace only ``[artifacts]`` so unrelated comments and formatting survive."""
+    document = tomlkit.parse(text)
+    table = document.get("artifacts")
+    if isinstance(table, MutableMapping):
+        table.update(artifacts.model_dump())
+    else:
+        document["artifacts"] = artifacts.model_dump()
+    return tomlkit.dumps(document)
+
+
+def record_artifacts(items: list[tuple[str, str]]) -> str:
+    """Add successful catalog selections to the rebuild manifest."""
+    cfg = TaraConfig.load()
+    selections = (
+        [(item.kind, item.name) for item in catalog.recognized_items()]
+        if cfg.artifacts is None
+        else []
+    )
+    artifacts = merge_artifacts(cfg.artifacts, selections + items)
+    path = repo_root() / CONFIG
+    if not path.exists():
+        return write_config(cfg.integrations, cfg.stack, False, artifacts)
+    path.write_text(
+        _replace_artifacts_table(path.read_text(encoding="utf-8"), artifacts),
+        encoding="utf-8",
+    )
+    return f"  updated {CONFIG.as_posix()} artifact manifest"

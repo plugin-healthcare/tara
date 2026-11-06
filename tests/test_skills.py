@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
+
+import pytest
+
 from tara import skills
 
 
@@ -21,6 +25,38 @@ def test_manifest_without_ref(repo):
     skills.write_manifest(src)
     back = skills.read_manifest()
     assert back["demo"].ref is None
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize("target_exists", [False, True])
+def test_regression_restore_reports_unsafe_managed_skills(
+    repo, tmp_path_factory, monkeypatch, dry_run, target_exists
+):
+    skills.write_manifest(
+        {"demo": skills.SkillSource(name="demo", repo="unused", path="demo")}
+    )
+    outside = tmp_path_factory.mktemp("restore-outside") / "demo"
+    if target_exists:
+        outside.mkdir()
+        (outside / "SKILL.md").write_text("outside content\n")
+    destination = repo / skills.SKILLS_DIR / "demo"
+    destination.parent.mkdir(parents=True)
+    destination.symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(
+        skills,
+        "fetch_skill",
+        lambda *args: pytest.fail("unsafe restore must not fetch"),
+    )
+
+    lines = skills.restore_missing(dry_run=dry_run)
+
+    assert len(lines) == 1
+    assert "skipped" in lines[0]
+    assert "symlink" in lines[0]
+    assert destination.is_symlink()
+    assert outside.exists() == target_exists
+    if target_exists:
+        assert (outside / "SKILL.md").read_text() == "outside content\n"
 
 
 def test_add_fetches_and_records(repo, skill_source):
@@ -139,3 +175,20 @@ def test_add_set_root_path_normalizes(repo, skill_source, monkeypatch):
     # path is normalized ('demo', not './demo') so update/remove resolve correctly
     assert skills.read_manifest()["demo"].path == "demo"
     assert skills.update("demo")[0][0] == "demo"
+
+
+def test_remove_never_deletes_through_a_symlinked_skills_directory(
+    repo, skill_source, tmp_path_factory
+):
+    url, ref = skill_source
+    skills.add(url, path="demo", ref=ref)
+    outside = tmp_path_factory.mktemp("outside")
+    (outside / "demo").mkdir()
+    skills_dir = repo / skills.SKILLS_DIR
+    shutil.rmtree(skills_dir)
+    skills_dir.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(skills.SkillError, match="symlink"):
+        skills.remove("demo")
+
+    assert (outside / "demo").is_dir()

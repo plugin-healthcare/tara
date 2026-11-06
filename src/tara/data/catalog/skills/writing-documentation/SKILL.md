@@ -10,6 +10,17 @@ Write for that reader: the why, the decisions, and how to use the thing, not the
 Prose style (plain, no AI tells) is in `.github/copilot-instructions.md`; markdown-file mechanics are in `.github/instructions/markdown.instructions.md`.
 This skill is the how.
 
+## Explain concepts clearly
+
+Adapt the practical ASD-STE100 writing guidance in `.github/copilot-instructions.md` to the audience and document type.
+Use it as a default for how-tos and introductory explanations.
+For ADRs and scientific writing, preserve the full reasoning, evidence, uncertainty, and domain conventions even when they require more complex prose.
+Use the [official ASD-STE100 site](https://www.asd-ste100.org/) when the reader needs the standard itself.
+Explain what the concept does before describing its implementation.
+Use one term for each concept and a concrete example when it helps.
+State who performs each action and the conditions that apply.
+Keep explanations natural; do not shorten them by removing necessary qualifications.
+
 ## Start from the reader
 
 - Name the audience and their question: new user, integrator, maintainer, on-call.
