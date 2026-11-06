@@ -24,12 +24,18 @@ DELIM = "---"
 _NO_WRAP = 10**6
 
 
-def parse(text: str) -> tuple[dict[str, Any], str]:
+class FrontmatterError(ValueError):
+    """A document starts with frontmatter that cannot be parsed safely."""
+
+
+def parse(text: str, *, strict: bool = False) -> tuple[dict[str, Any], str]:
     """Split a markdown document into its frontmatter mapping and its body.
 
     Values keep their YAML types, so ``tools: [read, search]`` parses as a list
     rather than a string that has to be re-scanned. Returns ``({}, text)`` when
     the document has no valid ``---`` delimited YAML mapping.
+    With ``strict=True``, malformed frontmatter raises :class:`FrontmatterError`;
+    a document without frontmatter still returns its original text.
     """
     lines = text.splitlines()
     if not lines or lines[0].rstrip() != DELIM:
@@ -38,14 +44,20 @@ def parse(text: str) -> tuple[dict[str, Any], str]:
     # block scalar's content, and treating it as the end truncates the mapping.
     end = next((i for i in range(1, len(lines)) if lines[i].rstrip() == DELIM), None)
     if end is None:
+        if strict:
+            raise FrontmatterError("frontmatter is missing its closing --- delimiter")
         return {}, text
     try:
         # The trailing newline matters: without it a block scalar in the last
         # key clips differently from one followed by another key.
         data = yaml.safe_load("\n".join(lines[1:end]) + "\n")
-    except yaml.YAMLError:
+    except yaml.YAMLError as exc:
+        if strict:
+            raise FrontmatterError(f"invalid YAML frontmatter: {exc}") from exc
         return {}, text
     if not isinstance(data, dict):
+        if strict:
+            raise FrontmatterError("frontmatter must be a YAML mapping")
         return {}, text
     return data, "\n".join(lines[end + 1 :]).strip()
 

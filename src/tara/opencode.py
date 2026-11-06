@@ -111,7 +111,7 @@ def _agent_permission(
 
 def translate_agent(source: Path) -> str:
     """Translate a Copilot ``.agent.md`` file into opencode agent markdown."""
-    fm, body = frontmatter.parse(source.read_text())
+    fm, body = frontmatter.parse(source.read_text(), strict=True)
     agent = OpencodeAgent(
         description=frontmatter.text_of(fm.get("description")) or None,
         permission=_agent_permission(fm.get("tools"), declared="tools" in fm),
@@ -125,7 +125,7 @@ def translate_prompt(source: Path) -> str:
     Keeps the ``description`` and body; drops Copilot-only frontmatter
     (``agent``/``tools``) that opencode commands don't use.
     """
-    fm, body = frontmatter.parse(source.read_text())
+    fm, body = frontmatter.parse(source.read_text(), strict=True)
     description = frontmatter.text_of(fm.get("description"))
     if not description:
         return generate.marked(body)
@@ -194,9 +194,12 @@ def port_agents(dry_run: bool = False, force: bool = False) -> list[str]:
     lines: list[str] = []
     for src in sorted(src_dir.glob("*.agent.md")):
         dest = root / OPENCODE_AGENTS_DIR / opencode_agent_name(src.name)
-        lines.append(
-            generate.write_generated(dest, translate_agent(src), dry_run, force)
-        )
+        try:
+            translated = translate_agent(src)
+        except frontmatter.FrontmatterError as exc:
+            lines.append(f"  skipped {src.relative_to(root)} ({exc}, left untouched)")
+            continue
+        lines.append(generate.write_generated(dest, translated, dry_run, force))
     return lines
 
 
@@ -216,12 +219,18 @@ def port_commands(dry_run: bool = False, force: bool = False) -> list[str]:
             rel = src.relative_to(src_dir)
             rel_dest = rel.with_name(rel.name.removesuffix(".prompt.md") + ".md")
             dest = root / OPENCODE_COMMANDS_DIR / rel_dest
+            try:
+                translated = translate_prompt(src)
+            except frontmatter.FrontmatterError as exc:
+                lines.append(
+                    f"  skipped {src.relative_to(root)} ({exc}, left untouched)"
+                )
+                produced.add(rel_dest.as_posix())
+                continue
             # Keyed by path, not basename: a nested python/check.md is a
             # different command from the root check.md starter.
             produced.add(rel_dest.as_posix())
-            lines.append(
-                generate.write_generated(dest, translate_prompt(src), dry_run, force)
-            )
+            lines.append(generate.write_generated(dest, translated, dry_run, force))
 
     for filename, (command, body) in _STARTER_COMMANDS.items():
         dest = root / OPENCODE_COMMANDS_DIR / filename

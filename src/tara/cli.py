@@ -737,7 +737,11 @@ def agent_add(
             f"error: no agent '{name}'. Available: {available or '(none)'}", err=True
         )
         raise typer.Exit(1)
-    typer.echo(catalog_mod.install_item(item).strip())
+    try:
+        typer.echo(catalog_mod.install_item(item).strip())
+    except catalog_mod.CatalogInstallError as exc:
+        typer.echo(str(exc).strip(), err=True)
+        raise typer.Exit(1) from exc
     config_mod.record_artifacts([(item.kind, item.name)])
 
 
@@ -1078,83 +1082,6 @@ def _artifact_pairs(
     ]
 
 
-def _same_tree(left: Path, right: Path) -> bool:
-    """Return whether two real directory trees contain the same files and bytes."""
-    if (
-        not left.is_dir()
-        or not right.is_dir()
-        or left.is_symlink()
-        or right.is_symlink()
-    ):
-        return False
-    left_files = {
-        path.relative_to(left): path
-        for path in left.rglob("*")
-        if path.is_file() and not path.is_symlink()
-    }
-    right_files = {
-        path.relative_to(right): path
-        for path in right.rglob("*")
-        if path.is_file() and not path.is_symlink()
-    }
-    if left_files.keys() != right_files.keys():
-        return False
-    return all(
-        left_files[relative].read_bytes() == right_files[relative].read_bytes()
-        for relative in left_files
-    )
-
-
-def _matches_catalog_source(item: catalog_mod.CatalogItem) -> bool:
-    """Prove an installed candidate matches the catalog source exactly."""
-    root = repo_root()
-    if item.kind == "skill":
-        if item.name in skills_mod.read_manifest():
-            return True
-        if item.source is None:
-            return False
-        return _same_tree(root / skills_mod.SKILLS_DIR / item.name, item.source)
-    if item.kind == "hooks":
-        return True
-    if item.kind == "mcp":
-        path = root / core_mod.MCP_CONFIG
-        if not path.is_file() or path.is_symlink():
-            return False
-        try:
-            installed = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return False
-        servers = installed.get("mcpServers", {})
-        return isinstance(servers, dict) and servers.get(
-            item.name
-        ) == _catalog_mcp_config(item.name)
-    if item.source is None:
-        return False
-    destinations = {
-        "agent": Path(".github") / "agents",
-        "prompt": Path(".github") / "prompts",
-        "instructions": Path(".github") / "instructions",
-    }
-    dest = root / destinations[item.kind] / item.name
-    return (
-        dest.is_file()
-        and not dest.is_symlink()
-        and dest.read_bytes() == item.source.read_bytes()
-    )
-
-
-def _catalog_mcp_config(name: str) -> dict[object, object] | None:
-    """Read one catalog MCP configuration."""
-    path = data_path() / "mcp" / "catalog.toml"
-    try:
-        catalog = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-    entry = catalog.get("servers", {}).get(name, {})
-    config = entry.get("config") if isinstance(entry, dict) else None
-    return config if isinstance(config, dict) else None
-
-
 def _mcp_config_is_owned(raw: object, stack: str) -> bool:
     """Prove every existing MCP entry came from Tara's core or catalog."""
     if not isinstance(raw, dict):
@@ -1187,7 +1114,7 @@ def _rebuild_catalog_item(
     if item.kind != "mcp":
         return catalog_mod.rebuild_item(item, dry_run, force)
     path = repo_root() / core_mod.MCP_CONFIG
-    desired = _catalog_mcp_config(item.name)
+    desired = catalog_mod.mcp_config(item.name)
     try:
         raw = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
     except (OSError, json.JSONDecodeError):
@@ -1209,12 +1136,7 @@ def _rebuild_manifest(
     """Return the explicit manifest, discovering legacy selections once."""
     if cfg.artifacts is not None:
         return cfg.artifacts
-    discovered = catalog_mod.installed_items(
-        ["skills", "agents", "prompts", "instructions", "hooks", "mcp"]
-    )
-    selections = [
-        (item.kind, item.name) for item in discovered if _matches_catalog_source(item)
-    ]
+    selections = [(item.kind, item.name) for item in catalog_mod.recognized_items()]
     artifacts = config_mod.merge_artifacts(None, selections)
     if dry_run:
         typer.echo(f"  [dry-run] record {len(selections)} recognized catalog artifacts")

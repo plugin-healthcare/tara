@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from typer.testing import CliRunner
 
-from tara import generate
+from tara import catalog, cli, generate, sync
 from tara.cli import app
 from tara.config import CONFIG, TaraConfig
 
@@ -62,6 +63,113 @@ def test_agent_add_unknown_fails(repo):
     result = runner.invoke(app, ["agent", "add", "nope"])
     assert result.exit_code == 1
     assert "no agent" in result.output
+
+
+def test_regression_agent_add_does_not_record_a_skipped_install(repo):
+    destination = repo / ".github" / "agents" / "yoda.agent.md"
+    destination.parent.mkdir(parents=True)
+    destination.write_text("authored content\n")
+
+    result = runner.invoke(app, ["agent", "add", "yoda"])
+
+    assert "skipped" in result.output
+    assert destination.read_text() == "authored content\n"
+    assert TaraConfig.load().artifacts is None
+
+
+def test_regression_bulk_add_records_only_successful_installs(repo, monkeypatch):
+    skipped = catalog.find_agent("yoda")
+    installed = catalog.find_agent("marvin")
+    assert skipped is not None and installed is not None
+    destination = repo / ".github" / "agents" / skipped.name
+    destination.parent.mkdir(parents=True)
+    destination.write_text("authored content\n")
+    monkeypatch.setattr(
+        catalog, "catalog", lambda kinds: {"agents": [skipped, installed]}
+    )
+
+    result = runner.invoke(app, ["add", "--all"])
+
+    assert result.exit_code == 0, result.output
+    artifacts = TaraConfig.load().artifacts
+    assert artifacts is not None
+    assert artifacts.agents == ["marvin.agent.md"]
+    assert destination.read_text() == "authored content\n"
+
+
+@pytest.mark.parametrize("bulk", [False, True])
+def test_regression_successful_add_preserves_legacy_agents(repo, monkeypatch, bulk):
+    config = repo / CONFIG
+    config.parent.mkdir()
+    config.write_text('tools = ["copilot"]\nstack = "python"\n')
+    existing = catalog.find_agent("yoda")
+    added = catalog.find_agent("marvin")
+    assert existing is not None and existing.source is not None and added is not None
+    destination = repo / ".github" / "agents" / existing.name
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(existing.source.read_bytes())
+    if bulk:
+        monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+        monkeypatch.setattr(cli, "_checkbox_select", lambda cat: [added])
+        cli._select_and_install(["agents"], select_all=False)
+    else:
+        result = runner.invoke(app, ["agent", "add", "marvin"])
+        assert result.exit_code == 0, result.output
+
+    artifacts = TaraConfig.load().artifacts
+    assert artifacts is not None
+    assert artifacts.agents == ["marvin.agent.md", "yoda.agent.md"]
+
+
+def test_regression_package_instructions_preserve_legacy_agents(repo, monkeypatch):
+    config = repo / CONFIG
+    config.parent.mkdir()
+    config.write_text('tools = ["copilot"]\nstack = "python"\n')
+    existing = catalog.find_agent("yoda")
+    assert existing is not None and existing.source is not None
+    destination = repo / ".github" / "agents" / existing.name
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(existing.source.read_bytes())
+    monkeypatch.setattr(sync, "direct_deps", lambda root: {"dagster"})
+    monkeypatch.setattr(
+        sync,
+        "sync",
+        lambda **kwargs: sync.SyncResult(
+            added=[], updated=[], removed=[], unchanged=[], skipped=[], warnings=[]
+        ),
+    )
+    monkeypatch.setattr(cli.skills_mod, "indexed_for_packages", lambda packages: [])
+
+    cli._run_sync(all_=False, docs=False)
+
+    artifacts = TaraConfig.load().artifacts
+    assert artifacts is not None
+    assert artifacts.agents == ["yoda.agent.md"]
+    assert "dagster.instructions.md" in artifacts.instructions
+
+
+def test_regression_package_instructions_do_not_record_a_skipped_install(
+    repo, tmp_path_factory, monkeypatch, capsys
+):
+    outside = tmp_path_factory.mktemp("indexed-instructions")
+    destination = repo / ".github" / "instructions"
+    destination.parent.mkdir()
+    destination.symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(sync, "direct_deps", lambda root: {"dagster"})
+    monkeypatch.setattr(
+        sync,
+        "sync",
+        lambda **kwargs: sync.SyncResult(
+            added=[], updated=[], removed=[], unchanged=[], skipped=[], warnings=[]
+        ),
+    )
+    monkeypatch.setattr(cli.skills_mod, "indexed_for_packages", lambda packages: [])
+
+    cli._run_sync(all_=False, docs=False)
+
+    assert "symlink" in capsys.readouterr().out
+    assert TaraConfig.load().artifacts is None
+    assert list(outside.iterdir()) == []
 
 
 def test_new_doc_changelog_writes_root_singleton(repo):

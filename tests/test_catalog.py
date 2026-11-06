@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from tara import catalog, frontmatter
+from types import SimpleNamespace
+
+import pytest
+from prompt_toolkit.application import create_app_session
+
+from tara import catalog, frontmatter, generate
 
 
 def test_catalog_lists_bundled_agents(repo):
@@ -49,9 +54,8 @@ def test_install_instruction_skips_a_symlinked_destination_directory(repo):
         if item.name == "markdown.instructions.md"
     )
 
-    line = catalog.install_item(item)
-
-    assert "symlink" in line
+    with pytest.raises(catalog.CatalogInstallError, match="symlink"):
+        catalog.install_item(item)
     assert not (outside / item.name).exists()
 
 
@@ -147,7 +151,9 @@ def test_install_bundled_skill_copies_tree(repo, tmp_path, monkeypatch):
     assert "writing-adrs" not in skills.read_manifest()
 
 
-def test_install_bundled_skill_overwrites_existing(repo, tmp_path, monkeypatch):
+def test_regression_install_bundled_skill_preserves_local_changes(
+    repo, tmp_path, monkeypatch
+):
     from tara import skills
 
     data_dir = tmp_path / "data"
@@ -159,8 +165,69 @@ def test_install_bundled_skill_overwrites_existing(repo, tmp_path, monkeypatch):
     stale = repo / skills.SKILLS_DIR / "writing-adrs" / "stale.md"
     stale.write_text("stale\n")
 
-    catalog.install_item(item)
-    assert not stale.exists()
+    with pytest.raises(RuntimeError, match="skipped"):
+        catalog.install_item(item)
+    assert stale.read_text() == "stale\n"
+
+
+@pytest.mark.parametrize("kind", ["agents", "prompts", "instructions"])
+def test_regression_direct_catalog_install_preserves_authored_files(
+    repo, monkeypatch, kind
+):
+    item = catalog.catalog([kind])[kind][0]
+    directory = "agents" if item.kind == "agent" else kind
+    destination = repo / ".github" / directory / item.name
+    destination.parent.mkdir(parents=True)
+    destination.write_text("authored content\n")
+    monkeypatch.setattr("tara.generate._interactive", lambda: False)
+
+    with pytest.raises(RuntimeError, match="skipped"):
+        catalog.install_item(item)
+
+    assert destination.read_text() == "authored content\n"
+
+
+@pytest.mark.parametrize("approved", [False, True])
+def test_regression_catalog_install_obeys_takeover_confirmation(
+    repo, monkeypatch, approved
+):
+    item = catalog.find_agent("yoda")
+    assert item is not None
+    destination = repo / ".github" / "agents" / item.name
+    destination.parent.mkdir(parents=True)
+    destination.write_text("authored content\n")
+    monkeypatch.setattr("tara.generate.confirm_takeover", lambda *args: approved)
+
+    if approved:
+        catalog.install_item(item)
+        assert item.source is not None
+        assert destination.read_bytes() == item.source.read_bytes()
+    else:
+        with pytest.raises(RuntimeError, match="skipped"):
+            catalog.install_item(item)
+        assert destination.read_text() == "authored content\n"
+
+
+def test_regression_catalog_takeover_previews_the_replacement_file(
+    repo, monkeypatch, capsys
+):
+    item = catalog.find_agent("yoda")
+    assert item is not None
+    destination = repo / ".github" / "agents" / item.name
+    destination.parent.mkdir(parents=True)
+    destination.write_text("authored content\n")
+    monkeypatch.setattr(generate, "_interactive", lambda: True)
+    monkeypatch.setattr(
+        "questionary.confirm",
+        lambda *args, **kwargs: SimpleNamespace(unsafe_ask=lambda: False),
+    )
+
+    with create_app_session(), pytest.raises(catalog.CatalogInstallError):
+        catalog.install_item(item)
+
+    output = capsys.readouterr().out
+    assert "-authored content" in output
+    assert "+description:" in output
 
 
 def test_instructions_index_lists_package_triggers():

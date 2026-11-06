@@ -257,18 +257,52 @@ _DEST = {
 }
 
 
-def install_item(item: CatalogItem) -> str:
+class CatalogInstallError(RuntimeError):
+    """A catalog destination cannot be installed without risking authored content."""
+
+
+def _install_bundled(
+    item: CatalogItem, dest: Path, dry_run: bool = False, force: bool = False
+) -> str:
+    """Copy bundled content only after checking safety and confirming collisions."""
+    assert item.source is not None
+    label = f"{item.kind} {item.name}"
+    if reason := generate.unsafe_reason(dest):
+        raise CatalogInstallError(f"  skipped {label} ({reason}, left untouched)")
+    rel = dest.relative_to(repo_root())
+    if dest.exists():
+        expected = dest.is_dir() if item.kind == "skill" else dest.is_file()
+        if not expected:
+            raise CatalogInstallError(
+                f"  skipped {label} (unexpected destination type, left untouched)"
+            )
+        if dest.is_file() and dest.read_bytes() == item.source.read_bytes():
+            return f"  unchanged {rel}"
+        if not force:
+            if dry_run:
+                return f"  [dry-run] replace {rel} (confirmation required)"
+            if not generate.confirm_takeover(dest, item.source, item.kind):
+                raise CatalogInstallError(
+                    f"  skipped {rel} (overwrite requires --force)"
+                )
+    if dry_run:
+        return f"  [dry-run] {label}"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if item.kind == "skill":
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(item.source, dest, ignore=shutil.ignore_patterns(".git"))
+        return f"  skill   {item.name} (bundled)"
+    shutil.copy2(item.source, dest)
+    return f"  {item.kind:7s} {item.name}"
+
+
+def install_item(item: CatalogItem, *, force: bool = False) -> str:
     """Install one catalog item into the repo. Returns a status line."""
     if item.kind == "skill":
         if item.source is not None:  # bundled skill: copy the tree, no manifest entry
             dest = repo_root() / skills.SKILLS_DIR / item.name
-            if reason := generate.unsafe_reason(dest):
-                return f"  skipped skill {item.name} ({reason}, left untouched)"
-            if dest.exists():
-                shutil.rmtree(dest)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(item.source, dest, ignore=shutil.ignore_patterns(".git"))
-            return f"  skill   {item.name} (bundled)"
+            return _install_bundled(item, dest, force=force)
         if item.is_set:
             installed = skills.add_set(item.name)
             names = ", ".join(s.name for s, _ in installed)
@@ -299,11 +333,7 @@ def install_item(item: CatalogItem) -> str:
 
     assert item.source is not None
     dest = repo_root() / _DEST[item.kind] / item.name
-    if reason := generate.unsafe_reason(dest):
-        return f"  skipped {item.kind} {item.name} ({reason}, left untouched)"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(item.source, dest)
-    return f"  {item.kind:7s} {item.name}"
+    return _install_bundled(item, dest, force=force)
 
 
 def rebuild_item(item: CatalogItem, dry_run: bool = False, force: bool = False) -> str:
@@ -318,33 +348,21 @@ def rebuild_item(item: CatalogItem, dry_run: bool = False, force: bool = False) 
     if item.kind == "skill":
         dest = repo_root() / skills.SKILLS_DIR / item.name
         if item.source is None:
+            if reason := generate.unsafe_reason(dest):
+                return f"  skipped skill {item.name} ({reason}, left untouched)"
             if dest.exists() and not force:
                 rel = dest.relative_to(repo_root())
                 return f"  skipped {rel} (overwrite requires --force)"
             if dry_run:
                 return f"  [dry-run] skill {item.name}"
-            return install_item(item)
-        replacement = item.source
+            return install_item(item, force=force)
     else:
         assert item.source is not None
         dest = repo_root() / _DEST[item.kind] / item.name
-        replacement = item.source
-
-    if dest.exists() and not force:
-        if (
-            dest.is_file()
-            and replacement.is_file()
-            and dest.read_bytes() == replacement.read_bytes()
-        ):
-            return f"  unchanged {dest.relative_to(repo_root())}"
-        if dry_run:
-            rel = dest.relative_to(repo_root())
-            return f"  [dry-run] replace {rel} (confirmation required)"
-        if not generate.confirm_takeover(dest, replacement, item.kind):
-            return f"  skipped {dest.relative_to(repo_root())} (overwrite requires --force)"
-    if dry_run:
-        return f"  [dry-run] {item.kind} {item.name}"
-    return install_item(item)
+    try:
+        return _install_bundled(item, dest, dry_run, force)
+    except CatalogInstallError as exc:
+        return str(exc)
 
 
 def installed_items(kinds: list[str]) -> list[CatalogItem]:
@@ -381,3 +399,86 @@ def _installed_mcp_names() -> set[str]:
         return set()
     servers = data.get("mcpServers", {}) if isinstance(data, dict) else {}
     return set(servers) if isinstance(servers, dict) else set()
+
+
+def _same_tree(left: Path, right: Path) -> bool:
+    """Return whether two real directory trees contain the same files and bytes."""
+    if (
+        not left.is_dir()
+        or not right.is_dir()
+        or left.is_symlink()
+        or right.is_symlink()
+    ):
+        return False
+    left_files = {
+        path.relative_to(left): path
+        for path in left.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    right_files = {
+        path.relative_to(right): path
+        for path in right.rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    if left_files.keys() != right_files.keys():
+        return False
+    return all(
+        left_files[relative].read_bytes() == right_files[relative].read_bytes()
+        for relative in left_files
+    )
+
+
+def mcp_config(name: str) -> dict[object, object] | None:
+    """Read one catalog MCP configuration."""
+    path = data_path() / "mcp" / "catalog.toml"
+    try:
+        catalog = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    entry = catalog.get("servers", {}).get(name, {})
+    config = entry.get("config") if isinstance(entry, dict) else None
+    return config if isinstance(config, dict) else None
+
+
+def _matches_catalog_source(item: CatalogItem) -> bool:
+    """Prove an installed candidate matches the catalog source exactly."""
+    root = repo_root()
+    if item.kind == "skill":
+        if item.name in skills.read_manifest():
+            return True
+        if item.source is None:
+            return False
+        return _same_tree(root / skills.SKILLS_DIR / item.name, item.source)
+    if item.kind == "hooks":
+        return True
+    if item.kind == "mcp":
+        path = root / ".mcp.json"
+        if not path.is_file() or path.is_symlink():
+            return False
+        try:
+            installed = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        servers = installed.get("mcpServers", {})
+        return isinstance(servers, dict) and servers.get(item.name) == mcp_config(
+            item.name
+        )
+    if item.source is None:
+        return False
+    dest = root / _DEST[item.kind] / item.name
+    return (
+        dest.is_file()
+        and not dest.is_symlink()
+        and dest.read_bytes() == item.source.read_bytes()
+    )
+
+
+def recognized_items() -> list[CatalogItem]:
+    """Recognize unmodified catalog selections in a legacy repository."""
+    return [
+        item
+        for item in installed_items(
+            ["skills", "agents", "prompts", "instructions", "hooks", "mcp"]
+        )
+        if _matches_catalog_source(item)
+    ]

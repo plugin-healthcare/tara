@@ -5,7 +5,9 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from tara import claude, core, frontmatter, generate
+import pytest
+
+from tara import claude, core, frontmatter, generate, opencode
 
 # ── tool name mapping ─────────────────────────────────────────────────────────
 
@@ -66,6 +68,30 @@ def test_translate_agent_omits_tools_when_none_declared(tmp_path):
     src.write_text('---\ndescription: "Open agent."\n---\n\nBody.\n')
     fm, _ = frontmatter.parse(claude.translate_agent(src))
     assert "tools" not in fm
+
+
+@pytest.mark.parametrize("adapter", [claude, opencode])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "---\ndescription: Reviewer. Use when: reviewing diffs\n"
+        "tools: [read, search]\n---\nBody.",
+        "---\ntools: [read, search]\nBody without a closing fence.",
+        "---\n- not a mapping\n---\nBody.",
+    ],
+)
+def test_regression_ports_skip_and_report_invalid_agents(repo, adapter, text):
+    source = repo / ".github" / "agents" / "broken.agent.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(text)
+    _make_agent(source.parent, "valid")
+
+    lines = adapter.port_agents()
+
+    destination = repo / f".{adapter.__name__.rsplit('.', 1)[-1]}" / "agents"
+    assert not (destination / "broken.md").exists()
+    assert (destination / "valid.md").is_file()
+    assert any("broken.agent.md" in line and "frontmatter" in line for line in lines)
 
 
 def test_translate_agent_falls_back_to_read_only_tools(tmp_path):

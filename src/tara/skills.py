@@ -415,6 +415,9 @@ def restore_missing(dry_run: bool = False) -> list[str]:
     lines: list[str] = []
     for name, source in sorted(manifest.items()):
         dest = repo_root() / SKILLS_DIR / name
+        if reason := generate.unsafe_reason(dest):
+            lines.append(f"  skipped restore skill {name} ({reason}, left untouched)")
+            continue
         if dest.exists():
             continue
         if dry_run:

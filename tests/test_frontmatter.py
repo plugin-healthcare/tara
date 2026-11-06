@@ -49,6 +49,24 @@ def test_parse_non_mapping_returns_empty():
     assert fm == {}
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "---\ndescription: Reviewer. Use when: reviewing diffs\ntools: [read]\n---\nBody.",
+        "---\ntools: [read]\nBody without a closing fence.",
+        "---\n- not a mapping\n---\nBody.",
+        "---\ntools: [*]\n---\nBody.",
+    ],
+)
+def test_regression_strict_parse_rejects_invalid_frontmatter(text):
+    with pytest.raises(ValueError, match="frontmatter"):
+        frontmatter.parse(text, strict=True)
+
+
+def test_regression_strict_parse_preserves_documents_without_frontmatter():
+    assert frontmatter.parse("Body.", strict=True) == ({}, "Body.")
+
+
 def test_parse_folded_block_scalar():
     text = (
         "---\n"

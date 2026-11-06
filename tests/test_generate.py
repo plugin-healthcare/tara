@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+from prompt_toolkit.application import create_app_session
+
 from tara import generate
 
 
@@ -72,7 +75,8 @@ def test_confirm_takeover_shows_diff_before_prompt(repo, monkeypatch, capsys):
             return False
 
     monkeypatch.setattr("questionary.confirm", lambda *args, **kwargs: _Prompt())
-    generate.write_generated(path, generate.marked("new"), dry_run=False)
+    with create_app_session():
+        generate.write_generated(path, generate.marked("new"), dry_run=False)
 
     output = capsys.readouterr().out
     assert "--- out.md (current)" in output
@@ -93,6 +97,60 @@ def test_write_generated_dry_run_writes_nothing(repo):
     line = generate.write_generated(path, generate.marked("New."), dry_run=True)
     assert not path.exists()
     assert "[dry-run]" in line
+
+
+@pytest.mark.parametrize(
+    "writer", [generate.write_generated, generate.write_configured]
+)
+@pytest.mark.parametrize("force", [False, True])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_regression_writers_reject_directories(repo, writer, force, dry_run):
+    destination = repo / "out.md"
+    destination.mkdir()
+    authored = destination / "keep.md"
+    authored.write_text("keep\n")
+
+    line = writer(destination, generate.marked("New."), dry_run=dry_run, force=force)
+
+    assert "skipped" in line
+    assert "directory" in line
+    assert authored.read_text() == "keep\n"
+
+
+def test_regression_generated_dry_run_never_prompts(repo, monkeypatch):
+    destination = repo / "out.md"
+    destination.write_text("mine\n")
+    monkeypatch.setattr(generate, "_interactive", lambda: True)
+    monkeypatch.setattr(
+        generate,
+        "confirm_takeover",
+        lambda *args: pytest.fail("dry runs must not prompt"),
+    )
+
+    line = generate.write_generated(destination, generate.marked("New."), dry_run=True)
+
+    assert "[dry-run]" in line
+    assert destination.read_text() == "mine\n"
+
+
+def test_regression_skill_mirror_dry_run_never_prompts(repo, monkeypatch):
+    source = repo / "source" / "demo"
+    source.mkdir(parents=True)
+    (source / "SKILL.md").write_text("generated\n")
+    destination = repo / "destination"
+    (destination / "demo").mkdir(parents=True)
+    (destination / "demo" / "SKILL.md").write_text("mine\n")
+    monkeypatch.setattr(generate, "_interactive", lambda: True)
+    monkeypatch.setattr(
+        generate,
+        "confirm_takeover",
+        lambda *args: pytest.fail("dry runs must not prompt"),
+    )
+
+    lines = generate.mirror_skills("claude", source.parent, destination, dry_run=True)
+
+    assert (destination / "demo" / "SKILL.md").read_text() == "mine\n"
+    assert not any("mirrored" in line for line in lines)
 
 
 def test_record_and_owned_round_trip(repo):

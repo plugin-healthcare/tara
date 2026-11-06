@@ -132,7 +132,7 @@ def test_translate_agent_denies_everything_for_an_empty_tool_list(tmp_path):
 
 
 def test_translate_agent_expands_wildcard_to_full_access(tmp_path):
-    source = _make_agent(tmp_path, "all", tools="*")
+    source = _make_agent(tmp_path, "all", tools='"*"')
     fm, _ = frontmatter.parse(opencode.translate_agent(source))
     assert "permission" not in fm
 

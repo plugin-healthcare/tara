@@ -10,10 +10,13 @@ of these options so they are discoverable. The models here read the file back.
 from __future__ import annotations
 
 import tomllib
+from collections.abc import MutableMapping
 from pathlib import Path
 
+import tomlkit
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from tara import catalog
 from tara.core import COPILOT, normalize_integrations, repo_root
 
 CONFIG = Path(".tara") / "config.toml"
@@ -226,7 +229,7 @@ def write_config(
             data[key] = value
     if artifacts is not None:
         data["artifacts"] = artifacts.model_dump()
-    elif "artifacts" not in data:
+    elif "artifacts" not in data and not path.exists():
         data["artifacts"] = ArtifactsConfig().model_dump()
     rel = CONFIG.as_posix()
     listed = ", ".join(selected)
@@ -234,13 +237,44 @@ def write_config(
         verb = "update" if path.exists() else "write"
         return f"  [dry-run] {verb} {rel} (integrations={listed}, stack={stack})"
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.write_text(
+            _update_setup_state(
+                path.read_text(encoding="utf-8"), selected, stack, artifacts
+            ),
+            encoding="utf-8",
+        )
+        return f"  updated {rel} (integrations={listed}, stack={stack})"
     docs = "\n".join(doc for name, doc in _OPTION_DOCS.items() if name not in data)
     text = _HEADER + _dump(data)
     if docs:
         text += "\n# --- optional settings (uncomment to enable) ---\n" + docs
     path.write_text(text)
-    verb = "updated" if existing else "wrote"
-    return f"  {verb} {rel} (integrations={listed}, stack={stack})"
+    return f"  wrote {rel} (integrations={listed}, stack={stack})"
+
+
+def _update_setup_state(
+    text: str, integrations: list[str], stack: str, artifacts: ArtifactsConfig | None
+) -> str:
+    """Set the managed keys in an existing config, keeping everything else intact."""
+    document = tomlkit.parse(text)
+    for legacy in ("tool", "tools"):
+        document.pop(legacy, None)
+    document["integrations"] = integrations
+    document["stack"] = stack
+    if artifacts is not None:
+        document = tomlkit.parse(
+            _replace_artifacts_table(tomlkit.dumps(document), artifacts)
+        )
+    updated = tomlkit.dumps(document)
+    missing = [
+        doc
+        for name, doc in _OPTION_DOCS.items()
+        if name not in document and doc.splitlines()[0] not in updated
+    ]
+    if missing:
+        updated += "\n" + "\n".join(missing)
+    return updated
 
 
 _ARTIFACT_FIELDS = {
@@ -271,45 +305,24 @@ def merge_artifacts(
 
 def _replace_artifacts_table(text: str, artifacts: ArtifactsConfig) -> str:
     """Replace only ``[artifacts]`` so unrelated comments and formatting survive."""
-    lines = text.splitlines(keepends=True)
-    table_starts = [
-        index
-        for index, line in enumerate(lines)
-        if line.lstrip().startswith("[") and "]" in line
-    ]
-    artifact_start = next(
-        (
-            index
-            for index in table_starts
-            if lines[index].split("#", 1)[0].strip() == "[artifacts]"
-        ),
-        None,
-    )
-    table = _dump({"artifacts": artifacts.model_dump()}).lstrip("\n")
-    if artifact_start is None:
-        separator = "" if not text or text.endswith("\n\n") else "\n"
-        return f"{text}{separator}{table}"
-    artifact_end = next(
-        (index for index in table_starts if index > artifact_start), len(lines)
-    )
-    fields = set(ArtifactsConfig.model_fields)
-    preserved = [
-        line
-        for line in lines[artifact_start + 1 : artifact_end]
-        if not (
-            "=" in line
-            and line.split("=", 1)[0].strip() in fields
-            and not line.lstrip().startswith("#")
-        )
-    ]
-    replacement = table.rstrip("\n") + "\n" + "".join(preserved)
-    return "".join([*lines[:artifact_start], replacement, *lines[artifact_end:]])
+    document = tomlkit.parse(text)
+    table = document.get("artifacts")
+    if isinstance(table, MutableMapping):
+        table.update(artifacts.model_dump())
+    else:
+        document["artifacts"] = artifacts.model_dump()
+    return tomlkit.dumps(document)
 
 
 def record_artifacts(items: list[tuple[str, str]]) -> str:
     """Add successful catalog selections to the rebuild manifest."""
     cfg = TaraConfig.load()
-    artifacts = merge_artifacts(cfg.artifacts, items)
+    selections = (
+        [(item.kind, item.name) for item in catalog.recognized_items()]
+        if cfg.artifacts is None
+        else []
+    )
+    artifacts = merge_artifacts(cfg.artifacts, selections + items)
     path = repo_root() / CONFIG
     if not path.exists():
         return write_config(cfg.integrations, cfg.stack, False, artifacts)

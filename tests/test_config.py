@@ -6,6 +6,7 @@ import tomllib
 
 import pytest
 
+from tara import catalog
 from tara.config import (
     CONFIG,
     AgentsConfig,
@@ -52,6 +53,24 @@ def test_write_preserves_standards_overrides(repo):
     assert "updated" in msg
     assert StandardsConfig.load().dev_tools == ["ruff"]
     assert TaraConfig.load().integrations == ["copilot", "opencode"]
+
+
+def test_regression_write_config_keeps_nested_tables_and_comments(repo):
+    write_config("copilot", "python", dry_run=False)
+    path = repo / CONFIG
+    path.write_text(
+        path.read_text() + '\n# keep this note\n[artifacts.metadata]\nowner = "local"\n'
+    )
+    record_artifacts([("agent", "yoda.agent.md")])
+
+    write_config(["claude"], "python", dry_run=False)
+
+    text = path.read_text()
+    data = tomllib.loads(text)
+    assert data["artifacts"]["metadata"] == {"owner": "local"}
+    assert "# keep this note" in text
+    assert data["artifacts"]["agents"] == ["yoda.agent.md"]
+    assert TaraConfig.load().integrations == ["copilot", "claude"]
 
 
 def test_dry_run_does_not_write(repo):
@@ -179,6 +198,101 @@ def test_load_preserves_missing_artifact_manifest_for_legacy_config(repo):
     _write_raw(repo, 'integrations = ["copilot"]\nstack = "python"\n')
 
     assert TaraConfig.load().artifacts is None
+
+
+def test_regression_write_preserves_legacy_discovery(repo):
+    _write_raw(repo, 'integrations = ["copilot"]\nstack = "python"\n')
+
+    write_config(["copilot", "claude"], "python", dry_run=False)
+
+    assert TaraConfig.load().artifacts is None
+
+
+def test_regression_write_preserves_explicit_empty_selection(repo):
+    _write_raw(repo, 'integrations = ["copilot"]\n[artifacts]\nagents = []\n')
+
+    write_config(["copilot", "claude"], "python", dry_run=False)
+
+    assert TaraConfig.load().artifacts == ArtifactsConfig()
+
+
+@pytest.mark.parametrize("explicit_manifest", [False, True])
+def test_regression_record_preserves_legacy_selections(repo, explicit_manifest):
+    _write_raw(
+        repo,
+        'integrations = ["copilot"]\n'
+        + ("[artifacts]\nagents = []\n" if explicit_manifest else ""),
+    )
+    existing = catalog.find_agent("yoda")
+    assert existing is not None and existing.source is not None
+    destination = repo / ".github" / "agents" / existing.name
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(existing.source.read_bytes())
+
+    record_artifacts([("agent", "marvin.agent.md")])
+
+    artifacts = TaraConfig.load().artifacts
+    assert artifacts is not None
+    expected = ["marvin.agent.md"]
+    if not explicit_manifest:
+        expected.append("yoda.agent.md")
+    assert artifacts.agents == expected
+
+
+def test_regression_record_preserves_out_of_order_artifact_tables(repo):
+    _write_raw(
+        repo,
+        'integrations = ["copilot"]\n'
+        "[artifacts]\n"
+        'agents = ["marvin.agent.md"]\n'
+        'note = "keep this" # keep the artifact note\n'
+        "[agents]\n"
+        'gitignore = ["memory"]\n'
+        "# keep the metadata comment\n"
+        "[artifacts.metadata]\n"
+        'owner = "local" # keep the owner comment\n',
+    )
+
+    record_artifacts([("agent", "yoda.agent.md")])
+
+    text = (repo / CONFIG).read_text()
+    data = tomllib.loads(text)
+    assert data["artifacts"]["agents"] == ["marvin.agent.md", "yoda.agent.md"]
+    assert data["artifacts"]["note"] == "keep this"
+    assert data["artifacts"]["metadata"] == {"owner": "local"}
+    assert data["agents"]["gitignore"] == ["memory"]
+    assert "# keep the artifact note" in text
+    assert "# keep the metadata comment" in text
+    assert "# keep the owner comment" in text
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        'agents = [\n  "marvin.agent.md", # keep the selected agent\n]\n',
+        '"agents" = [\n  "marvin.agent.md",\n]\n',
+    ],
+)
+def test_regression_record_artifacts_replaces_multiline_values(repo, selection):
+    _write_raw(
+        repo,
+        'integrations = ["copilot"]\n'
+        "# keep the top-level comment\n"
+        "[artifacts]\n" + selection + "# keep the artifact comment\n"
+        'note = """\n[not-a-table]\nkeep this text\n"""\n'
+        '[agents]\ngitignore = ["memory"] # keep the neighbour\n',
+    )
+
+    record_artifacts([("agent", "yoda.agent.md")])
+
+    text = (repo / CONFIG).read_text()
+    data = tomllib.loads(text)
+    assert data["artifacts"]["agents"] == ["marvin.agent.md", "yoda.agent.md"]
+    assert data["artifacts"]["note"] == "[not-a-table]\nkeep this text\n"
+    assert data["agents"]["gitignore"] == ["memory"]
+    assert "# keep the top-level comment" in text
+    assert "# keep the artifact comment" in text
+    assert "# keep the neighbour" in text
 
 
 # ── hand-edited configs must fail loudly, not guess ───────────────────────────

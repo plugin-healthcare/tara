@@ -159,7 +159,7 @@ def translate_agent(source: Path) -> str:
     its names map onto Claude tools it falls back to :data:`_SAFE_TOOLS` rather
     than omitting the key, which would silently inherit Bash and Write.
     """
-    fm, body = frontmatter.parse(source.read_text())
+    fm, body = frontmatter.parse(source.read_text(), strict=True)
     if "tools" not in fm:
         tools = None
     else:
@@ -192,7 +192,7 @@ def translate_prompt(source: Path, destination: Path, root: Path) -> str:
     source instead of copying it. Claude Code expands ``@`` references in slash
     commands, so the Copilot prompt remains the single source of truth.
     """
-    fm, _ = frontmatter.parse(source.read_text())
+    fm, _ = frontmatter.parse(source.read_text(), strict=True)
     description = frontmatter.text_of(fm.get("description"))
     body = generate.marked(f"@{_relative_import(source, destination, root).as_posix()}")
     if not description:
@@ -246,9 +246,12 @@ def port_agents(dry_run: bool = False, force: bool = False) -> list[str]:
     lines: list[str] = []
     for src in sorted(src_dir.glob("*.agent.md")):
         dest = root / CLAUDE_AGENTS_DIR / f"{claude_agent_name(src.name)}.md"
-        lines.append(
-            generate.write_generated(dest, translate_agent(src), dry_run, force)
-        )
+        try:
+            translated = translate_agent(src)
+        except frontmatter.FrontmatterError as exc:
+            lines.append(f"  skipped {src.relative_to(root)} ({exc}, left untouched)")
+            continue
+        lines.append(generate.write_generated(dest, translated, dry_run, force))
     return lines
 
 
@@ -272,13 +275,21 @@ def port_commands(dry_run: bool = False, force: bool = False) -> list[str]:
             rel = src.relative_to(src_dir)
             rel_dest = rel.with_name(rel.name.removesuffix(".prompt.md") + ".md")
             dest = root / CLAUDE_COMMANDS_DIR / rel_dest
+            try:
+                translated = translate_prompt(src, dest, root)
+            except frontmatter.FrontmatterError as exc:
+                lines.append(
+                    f"  skipped {src.relative_to(root)} ({exc}, left untouched)"
+                )
+                produced.add(rel_dest.as_posix())
+                continue
             # Keyed by path, not basename: a nested python/check.md is a
             # different command from the root check.md starter.
             produced.add(rel_dest.as_posix())
             lines.append(
                 generate.write_generated(
                     dest,
-                    translate_prompt(src, dest, root),
+                    translated,
                     dry_run,
                     force,
                 )

@@ -124,7 +124,11 @@ def confirm_takeover(dest: Path, replacement: str | Path, kind: str = "file") ->
                 current = dest.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 current = "[binary or unreadable file]\n"
-        proposed = _tree_text(replacement)
+        proposed = (
+            _tree_text(replacement)
+            if replacement.is_dir()
+            else replacement.read_text(encoding="utf-8")
+        )
     else:
         try:
             current = dest.read_text(encoding="utf-8")
@@ -150,6 +154,8 @@ def write_generated(dest: Path, text: str, dry_run: bool, force: bool = False) -
     if reason := unsafe_reason(dest):
         return f"  skipped {_display(dest)} ({reason}, left untouched)"
     rel = dest.relative_to(repo_root())
+    if dest.exists() and not dest.is_file():
+        return f"  skipped {rel} (directory or non-file destination, left untouched)"
     if dest.is_file():
         try:
             if dest.read_text(encoding="utf-8") == text:
@@ -157,6 +163,8 @@ def write_generated(dest: Path, text: str, dry_run: bool, force: bool = False) -
         except (OSError, UnicodeDecodeError):
             pass
     if dest.exists() and not is_generated(dest) and not force:
+        if dry_run:
+            return f"  [dry-run] replace {rel} (confirmation required)"
         if not _interactive():
             return f"  skipped {rel} (overwrite requires --force)"
         if not confirm_takeover(dest, text):
@@ -173,6 +181,8 @@ def write_configured(dest: Path, text: str, dry_run: bool, force: bool = False) 
     if reason := unsafe_reason(dest):
         return f"  skipped {_display(dest)} ({reason}, left untouched)"
     rel = dest.relative_to(repo_root())
+    if dest.exists() and not dest.is_file():
+        return f"  skipped {rel} (directory or non-file destination, left untouched)"
     if dest.is_file():
         try:
             if dest.read_text(encoding="utf-8") == text:
@@ -268,6 +278,9 @@ def mirror_skills(
             lines.append(f"  skipped {rel} ({reason}, left untouched)")
             continue
         if unowned and not force:
+            if dry_run:
+                lines.append(f"  [dry-run] {rel} (would ask before replacing)")
+                continue
             if not _interactive():
                 lines.append(f"  skipped {rel} (overwrite requires --force)")
                 continue

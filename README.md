@@ -146,6 +146,14 @@ Interactive runs show a unified diff and ask before replacement; non-interactive
 `opencode.json` is updated in place: Tara manages `$schema`, `instructions`, and `mcp`, and leaves your other settings alone.
 Malformed JSON is reported and preserved byte-for-byte.
 
+Direct catalog installs also preserve existing agents, prompts, instructions, and bundled skills unless you approve replacement.
+Skipped installs are reported and are not added to the rebuild manifest.
+In legacy projects without a rebuild manifest, the first successful catalog install also records existing selections whose installed content matches the catalog.
+An explicit empty manifest stays an intentional empty selection.
+Claude and OpenCode generation skip and report malformed YAML frontmatter instead of dropping an agent's tool restrictions.
+Quote a wildcard tool name as `tools: ["*"]`; an unquoted YAML alias such as `tools: [*]` is invalid.
+Dry runs preview replacements without asking for confirmation, and `--force` never replaces a directory where a file is expected.
+
 Edit the Copilot side (or Tara's bundled standard) and re-run `tara sync`.
 The default `tara init` targets Copilot only and generates nothing extra.
 

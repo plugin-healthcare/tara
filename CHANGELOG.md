@@ -29,6 +29,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Direct catalog installs now preview and confirm replacement of existing agents, prompts, instructions, and bundled skills.
+  Refused installs are never recorded as successful selections by bulk installation, `tara agent add`, or package-triggered instruction sync.
+- Claude and OpenCode generation skip and report malformed YAML frontmatter and missing closing fences instead of generating agents with unrestricted tools.
+- Updating integrations preserves legacy catalog discovery until the rebuild manifest is populated.
+  The first successful catalog install preserves recognized legacy selections when recording the manifest.
+  Artifact updates use structure-aware TOML editing so multiline values, unrelated fields, nested tables, and comments survive, including interleaved tables.
+- Generated-file writers leave directory destinations untouched even with `--force`, and generated-file dry runs never prompt for replacement.
+- Managed-skill restoration checks destination safety before treating existing skills as restored or reporting a dry-run restore.
 - Generated writes, copies, and deletions now refuse a destination outside the repository or reached through a symlinked directory, such as a symlinked `.claude/` or `.github/skills/`.
   Hooks, catalog installs, Claude and OpenCode generation, skills, and library-skill sync share one check.
 - Installing a hook bundle no longer skips a hook because the same command runs under a different matcher, and it appends only the hooks that are missing for a matcher.
